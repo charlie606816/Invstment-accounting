@@ -73,21 +73,6 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div class="bg-white p-6 rounded-xl shadow-md">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">🍩 投資本金占比分佈 (原始投入)</h3>
-                <div class="relative max-w-xs mx-auto h-64">
-                    <canvas id="costChart"></canvas>
-                </div>
-            </div>
-            <div class="bg-white p-6 rounded-xl shadow-md">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">🔮 即時現值權重分佈 (資產分配)</h3>
-                <div class="relative max-w-xs mx-auto h-64">
-                    <canvas id="valueChart"></canvas>
-                </div>
-            </div>
-        </div>
-
         <div class="bg-white p-6 rounded-xl shadow-md mb-6">
             <h3 class="text-lg font-semibold text-gray-800 mb-4">🔍 歷史明細篩選控制區</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -108,7 +93,7 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-md overflow-hidden">
+        <div class="bg-white rounded-xl shadow-md overflow-hidden mb-6">
             <div class="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center flex-wrap gap-2">
                 <h2 class="text-xl font-bold text-gray-800 flex items-center">📜 歷史交易紀錄與實現損益明細</h2>
                 <button onclick="clearHistory()" class="bg-gray-200 hover:bg-gray-300 text-gray-600 font-medium py-1 px-3 rounded text-sm transition">🗑️ 清空歷史紀錄</button>
@@ -137,6 +122,21 @@
                         </tr>
                     </tfoot>
                 </table>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white p-6 rounded-xl shadow-md">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">📊 資產現值圓餅占比圖</h3>
+                <div class="relative max-w-xs mx-auto h-64">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-md">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">📈 庫存個股漲跌幅直方圖 (%)</h3>
+                <div class="relative max-w-full mx-auto h-64">
+                    <canvas id="barChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -177,11 +177,11 @@
         // 核心資料結構與圖表實例
         let stocks = [];
         let historyLog = [];
-        let costChartInstance = null;
-        let valueChartInstance = null;
+        let pieChartInstance = null;
+        let barChartInstance = null;
 
-        // 色彩配置庫
-        const chartColors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
+        // 亮麗外觀色彩庫
+        const chartColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
         window.onload = function() {
             const savedStocks = localStorage.getItem('accounting_stocks');
@@ -204,7 +204,7 @@
             renderTable();
             updateSelectOptions();
             applyFilters();
-            showStatus("📊 歡迎回來！已為您成功恢復並加載全新動態雙占比圖表。");
+            showStatus("📊 圖表已成功歸位最下方！左側圓餅占比、右側漲幅直方圖已同步載入。");
         };
 
         function renderTable() {
@@ -215,8 +215,8 @@
             let totalCurrentValue = 0;
 
             let chartLabels = [];
-            let costData = [];
-            let valueData = [];
+            let marketValues = [];
+            let returnPercents = [];
 
             stocks.forEach((stock, index) => {
                 const stockCostRow = stock.shares * stock.cost;
@@ -225,12 +225,13 @@
                 totalCapital += stockCostRow;
                 totalCurrentValue += stockMarketValue;
 
-                chartLabels.push(stock.name);
-                costData.push(Math.round(stockCostRow));
-                valueData.push(Math.round(stockMarketValue));
-
                 const changePercent = ((stock.current - stock.cost) / stock.cost * 100).toFixed(2);
                 const isPositive = changePercent >= 0;
+
+                // 圖表數據收集
+                chartLabels.push(stock.name);
+                marketValues.push(Math.round(stockMarketValue));
+                returnPercents.push(parseFloat(changePercent));
 
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-gray-50 transition text-center';
@@ -259,224 +260,4 @@
             
             const totalPercentField = document.getElementById('totalProfitLossPercent');
             if (totalCapital > 0) {
-                const totalPercent = ((totalCurrentValue - totalCapital) / totalCapital * 100).toFixed(2);
-                totalPercentField.value = (totalPercent >= 0 ? '+' : '') + totalPercent + '%';
-                
-                if (totalProfitLoss >= 0) {
-                    totalProfitLossField.className = "w-full bg-red-50 border border-red-300 rounded-lg p-2 font-bold text-red-600 focus:outline-none";
-                    totalPercentField.className = "w-full bg-red-50 border border-red-300 rounded-lg p-2 font-bold text-red-600 focus:outline-none";
-                } else {
-                    totalProfitLossField.className = "w-full bg-emerald-50 border border-emerald-300 rounded-lg p-2 font-bold text-emerald-600 focus:outline-none";
-                    totalPercentField.className = "w-full bg-emerald-50 border border-emerald-300 rounded-lg p-2 font-bold text-emerald-600 focus:outline-none";
-                }
-            } else {
-                totalPercentField.value = '0.00%';
-            }
-
-            stocks.forEach((stock, index) => {
-                const stockCostRow = stock.shares * stock.cost;
-                const weight = totalCapital > 0 ? ((stockCostRow / totalCapital) * 100).toFixed(2) : 0;
-                const weightTd = document.getElementById(`weight-${index}`);
-                if (weightTd) weightTd.innerText = `${weight}%`;
-            });
-
-            // 實時刷新圖表數據
-            updateCharts(chartLabels, costData, valueData);
-        }
-
-        // 動態圖表刷新與建立邏輯
-        function updateCharts(labels, costData, valueData) {
-            if (costChartInstance) costChartInstance.destroy();
-            if (valueChartInstance) valueChartInstance.destroy();
-
-            const chartOptions = {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let val = context.raw || 0;
-                                return ` ${context.label}: $${val.toLocaleString()} 元`;
-                            }
-                        }
-                    }
-                }
-            };
-
-            const ctxCost = document.getElementById('costChart').getContext('2d');
-            costChartInstance = new Chart(ctxCost, {
-                type: 'doughnut',
-                data: { labels: labels, datasets: [{ data: costData, backgroundColor: chartColors }] },
-                options: chartOptions
-            });
-
-            const ctxValue = document.getElementById('valueChart').getContext('2d');
-            valueChartInstance = new Chart(ctxValue, {
-                type: 'pie',
-                data: { labels: labels, datasets: [{ data: valueData, backgroundColor: chartColors }] },
-                options: chartOptions
-            });
-        }
-
-        function updateStockField(index, field, value) {
-            if (field === 'name') stocks[index].name = value;
-            else stocks[index][field] = Number(value) || 0;
-            renderTable();
-            updateSelectOptions();
-            autoSave();
-        }
-
-        function addStockRow() {
-            stocks.push({ name: '新創立標的名稱', shares: 1000, cost: 10.0, current: 10.0 });
-            renderTable();
-            updateSelectOptions();
-            autoSave();
-        }
-
-        function deleteStockRow(index) {
-            if(confirm(`確認要從精簡看板中移除 ${stocks[index].name} 嗎？`)) {
-                stocks.splice(index, 1);
-                renderTable();
-                updateSelectOptions();
-                autoSave();
-            }
-        }
-
-        function openTransactionModal(index) {
-            document.getElementById('modalStockIndex').value = index;
-            document.getElementById('modalTitle').innerText = `📊 執行庫存交易異動 - ${stocks[index].name}`;
-            document.getElementById('modalDate').value = new Date().toISOString().split('T')[0];
-            document.getElementById('modalShares').value = '';
-            document.getElementById('modalPrice').value = stocks[index].current;
-            document.getElementById('transactionModal').classList.remove('hidden');
-        }
-
-        function closeModal() { document.getElementById('transactionModal').classList.add('hidden'); }
-
-        function submitTransaction() {
-            const index = document.getElementById('modalStockIndex').value;
-            const type = document.getElementById('modalType').value;
-            const date = document.getElementById('modalDate').value || new Date().toLocaleDateString();
-            const shares = Number(document.getElementById('modalShares').value);
-            const price = Number(document.getElementById('modalPrice').value);
-
-            if (!shares || !price) { alert('請填寫完整正確的股數與交易單價！'); return; }
-
-            let profitLoss = 0;
-            const originalCost = stocks[index].cost;
-            const originalShares = stocks[index].shares;
-
-            if (type === '買入加碼') {
-                const totalCost = (originalShares * originalCost) + (shares * price);
-                stocks[index].shares = originalShares + shares;
-                stocks[index].cost = Number((totalCost / stocks[index].shares).toFixed(2));
-                profitLoss = 0; 
-            } else if (type === '分批賣出') {
-                if (shares > originalShares) { alert('錯誤：賣出股數大於現有持股總額！'); return; }
-                stocks[index].shares = originalShares - shares;
-                profitLoss = Math.round((price - originalCost) * shares);
-            }
-
-            historyLog.unshift({
-                date: date, name: stocks[index].name, type: type,
-                shares: shares, price: price, total: Math.round(shares * price), profit: profitLoss
-            });
-
-            closeModal();
-            renderTable();
-            applyFilters();
-            autoSave();
-        }
-
-        function updateSelectOptions() {
-            const select = document.getElementById('filterStock');
-            const currentValue = select.value;
-            select.innerHTML = '<option value="all">顯示全部標的</option>';
-            stocks.forEach(s => { select.innerHTML += `<option value="${s.name}">${s.name}</option>`; });
-            if([...select.options].some(o => o.value === currentValue)) select.value = currentValue;
-        }
-
-        function applyFilters() {
-            const filterStock = document.getElementById('filterStock').value;
-            const startDate = document.getElementById('filterStartDate').value;
-            const endDate = document.getElementById('filterEndDate').value;
-
-            const tbody = document.getElementById('historyTableBody');
-            tbody.innerHTML = '';
-
-            let filteredCount = 0;
-            let filteredTotalAmount = 0;
-            let filteredTotalProfit = 0;
-
-            historyLog.forEach(log => {
-                const matchStock = (filterStock === 'all' || log.name === filterStock);
-                const matchStart = (!startDate || log.date >= startDate);
-                const matchEnd = (!endDate || log.date <= endDate);
-
-                if (matchStock && matchStart && matchEnd) {
-                    filteredCount++;
-                    filteredTotalAmount += log.total;
-                    filteredTotalProfit += log.profit;
-
-                    let profitText = '';
-                    let profitClass = 'text-gray-500';
-                    if (log.type === '分批賣出') {
-                        if (log.profit > 0) { profitText = `賺 $${log.profit.toLocaleString()}`; profitClass = 'text-red-600 font-semibold'; }
-                        else if (log.profit < 0) { profitText = `賠 $${Math.abs(log.profit).toLocaleString()}`; profitClass = 'text-emerald-600 font-semibold'; }
-                        else { profitText = '$0 (平盤)'; }
-                    } else { profitText = '$0 (平盤)'; }
-
-                    const row = document.createElement('tr');
-                    row.className = 'hover:bg-gray-50 transition';
-                    row.innerHTML = `
-                        <td class="p-4">${log.date}</td>
-                        <td class="p-4 text-slate-700 font-medium">${log.name}</td>
-                        <td class="p-4 font-bold ${log.type === '買入加碼' ? 'text-red-600' : 'text-emerald-600'}">${log.type}</td>
-                        <td class="p-4">${log.shares.toLocaleString()} 股</td>
-                        <td class="p-4">$${log.price.toLocaleString()}</td>
-                        <td class="p-4 font-medium text-gray-800">$${log.total.toLocaleString()}</td>
-                        <td class="p-4 ${profitClass}">${profitText}</td>
-                    `;
-                    tbody.appendChild(row);
-                }
-            });
-
-            document.getElementById('summaryCount').innerText = `共 ${filteredCount} 筆明細`;
-            document.getElementById('summaryTotalAmount').innerText = `交易總額: $${filteredTotalAmount.toLocaleString()}`;
-            
-            const profitTd = document.getElementById('summaryTotalProfit');
-            profitTd.innerText = `累積實現總損益: ${filteredTotalProfit >= 0 ? '+' : ''}$${filteredTotalProfit.toLocaleString()}`;
-            if(filteredTotalProfit > 0) profitTd.className = "p-4 text-right pr-6 text-red-600 font-black text-base";
-            else if(filteredTotalProfit < 0) profitTd.className = "p-4 text-right pr-6 text-emerald-600 font-black text-base";
-            else profitTd.className = "p-4 text-right pr-6 text-slate-700 font-bold";
-        }
-
-        function clearHistory() {
-            if(confirm('確定清空歷史對帳單明細？')) { historyLog = []; applyFilters(); autoSave(); }
-        }
-
-        function fetchCurrentPrices() {
-            showStatus("⏳ 正在跨網域連線券商系統取得即時最新權益價格...");
-            setTimeout(() => {
-                stocks.forEach(s => {
-                    const volatility = (Math.random() * 0.01) - 0.005; 
-                    s.current = Number((s.current * (1 + volatility)).toFixed(2));
-                });
-                renderTable();
-                showStatus("✅ 股價同步成功！雙統計圖表占比已同步更新。");
-                autoSave();
-            }, 800);
-        }
-
-        function autoSave() {
-            localStorage.setItem('accounting_stocks', JSON.stringify(stocks));
-            localStorage.setItem('accounting_history', JSON.stringify(historyLog));
-        }
-
-        function manualSave() { autoSave(); showStatus("💾 內政數據與流水帳本已成功手動同步存檔至本機瀏覽器！"); }
-        function showStatus(msg) { document.getElementById('syncStatus').innerText = msg; }
-    </script>
-</body>
-</html>
+                const totalPercent
