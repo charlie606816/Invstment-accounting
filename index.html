@@ -138,36 +138,4 @@
                 </div>
             </div>
             <div class="bg-white p-6 rounded-xl shadow-md">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">📈 庫存個股漲跌幅直方圖 (%)</h3>
-                <div class="relative max-w-full mx-auto h-64">
-                    <canvas id="barChart"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="transactionModal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl relative">
-            <h3 id="modalTitle" class="text-lg font-bold text-gray-800 mb-4">📈 執行庫存交易異動</h3>
-            <input type="hidden" id="modalStockIndex">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">交易類型</label>
-                    <select id="modalType" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                        <option value="買入加碼">加碼買進 (增加股數並重新計算平均成本)</option>
-                        <option value="分批賣出">分批賣出 (減少股數並計算獲利或虧損明細)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">交易日期</label>
-                    <input type="date" id="modalDate" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">異動股數 (股)</label>
-                    <input type="number" id="modalShares" min="1" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="例如: 1000">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">交易單價 (元)</label>
-                    <input type="number" id="modalPrice" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="例如: 24.5">
-                </div>
-            </div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center
