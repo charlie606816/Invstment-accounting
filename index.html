@@ -24,6 +24,9 @@
                     <button onclick="fetchCurrentPrices()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
                         🔄 多網域同步更新股價
                     </button>
+                    <button onclick="manualSave()" class="bg-gray-700 hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded-lg shadow transition whitespace-nowrap">
+                        💾 手動即時存檔
+                    </button>
                 </div>
                 <div id="statusMessage" class="text-xs text-gray-500 mt-1 h-4 font-medium"></div>
             </div>
@@ -53,7 +56,64 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 border-b pb-4 gap-4">
+                <div class="flex items-center gap-4 flex-wrap">
+                    <h3 class="text-lg font-bold text-gray-700 flex items-center gap-2">📜 歷史交易紀錄與實現損益明細</h3>
+                    <div class="bg-gray-100 px-3 py-1 rounded-lg text-sm border">
+                        💰 帳戶歷史累計總損益：<span id="totalRealizedPnl" class="font-bold text-gray-700">$0</span>
+                    </div>
+                </div>
+                
+                <div class="flex flex-wrap items-center gap-2 bg-gray-50 p-2 rounded-lg border text-xs w-full lg:w-auto">
+                    <span class="font-bold text-gray-600 flex items-center gap-1">🔍 條件篩選：</span>
+                    <div class="flex items-center gap-1">
+                        <span>日期:</span>
+                        <input type="date" id="filterDate" onchange="filterLogs()" class="border rounded p-1 bg-white font-medium">
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span>標的:</span>
+                        <select id="filterCode" onchange="filterLogs()" class="border rounded p-1 bg-white font-medium max-w-40">
+                            <option value="ALL">全部股票</option>
+                        </select>
+                    </div>
+                    <button onclick="resetFilters()" class="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-gray-700 transition">重置</button>
+                </div>
+
+                <button onclick="clearHistoryLog()" class="text-xs bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-600 py-1.5 px-3 rounded border transition shrink-0 ml-auto lg:ml-0">🗑️ 清空歷史紀錄</button>
+            </div>
+
+            <div class="overflow-x-auto max-h-80 overflow-y-auto border rounded-lg">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-gray-100 text-gray-600 font-semibold border-b sticky top-0">
+                            <th class="p-2.5 text-center">交易日期</th>
+                            <th class="p-2.5 text-center">股票標的</th>
+                            <th class="p-2.5 text-center">交易類型</th>
+                            <th class="p-2.5 text-center">異動股數</th>
+                            <th class="p-2.5 text-center">交易單價</th>
+                            <th class="p-2.5 text-center">交易總額</th>
+                            <th class="p-2.5 text-center">該筆實現損益</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyLogBody">
+                        </tbody>
+                    <tfoot>
+                        <tr class="bg-blue-50/70 border-t-2 border-blue-200 font-bold text-center">
+                            <td colspan="2" class="p-3 text-blue-800 text-left pl-4">📊 當前篩選條件下結果小計：</td>
+                            <td id="filteredCount" class="p-3 text-gray-600 font-medium text-xs">共 0 筆明細</td>
+                            <td colspan="3" class="p-3 text-right text-gray-700 pr-4">當前顯示實現損益加總：</td>
+                            <td id="filteredPnlSum" class="p-3 text-gray-800 text-base">$0</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <div id="emptyLogMessage" class="text-center p-6 text-gray-400 text-xs">
+                    暫無任何買賣異動紀錄，進行「交易異動」調整後將在此自動記錄。
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="bg-white p-6 rounded-xl shadow-md h-96 flex flex-col justify-between">
                 <h3 class="text-lg font-bold text-gray-700 text-center mb-2">🍰 庫存每支股票的本金持有占比 (%)</h3>
                 <div class="relative flex-1 min-h-0 w-full flex justify-center items-center">
@@ -67,44 +127,22 @@
                 </div>
             </div>
         </div>
-
-        <div class="bg-white p-6 rounded-xl shadow-md">
-            <div class="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 class="text-lg font-bold text-gray-700 flex items-center gap-2">📜 歷史交易紀錄明細流水帳</h3>
-                <button onclick="clearHistoryLog()" class="text-xs bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-600 py-1 px-3 rounded border transition">🗑️ 清空歷史紀錄</button>
-            </div>
-            <div class="overflow-x-auto max-h-64 overflow-y-auto">
-                <table class="w-full text-left border-collapse text-sm">
-                    <thead>
-                        <tr class="bg-gray-100 text-gray-600 font-semibold border-b">
-                            <th class="p-2 text-center">交易時間</th>
-                            <th class="p-2 text-center">股票標的</th>
-                            <th class="p-2 text-center">交易類型</th>
-                            <th class="p-2 text-center">異動股數</th>
-                            <th class="p-2 text-center">交易單價</th>
-                            <th class="p-2 text-center">交易總額</th>
-                        </tr>
-                    </thead>
-                    <tbody id="historyLogBody">
-                        </tbody>
-                </table>
-                <div id="emptyLogMessage" class="text-center p-6 text-gray-400 text-xs">
-                    暫無任何買賣異動紀錄，進行「交易異動」調整後將在此自動記錄。
-                </div>
-            </div>
-        </div>
     </div>
 
     <script>
         let weightChartInstance = null;
         let returnChartInstance = null;
 
-        // 股票代號對照中文名稱資料庫
         const twStockDatabase = {
             "0056": "元大高股息", "00878": "國泰永續高股息", "00919": "群益台灣精選高基", 
             "0050": "元大台灣50", "2330": "台積電", "3661": "世芯-KY", "2454": "聯發科", 
             "2317": "鴻海", "2303": "聯電", "2382": "廣達", "3231": "緯創", "6515": "穎崴"
         };
+
+        function getTodayString() {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        }
 
         function showStatus(msg, isError = false) {
             const statusEl = document.getElementById('statusMessage');
@@ -112,7 +150,6 @@
             statusEl.className = `text-xs mt-1 h-4 font-medium ${isError ? 'text-red-500' : 'text-emerald-600'}`;
         }
 
-        // 新增股票列 (可帶入既有資料)
         function addStockRow(savedData = null) {
             document.getElementById('emptyMessage').classList.add('hidden');
             const tbody = document.getElementById('stockTableBody');
@@ -142,15 +179,19 @@
             panelTr.className = "bg-gray-50 border-b border-gray-200 hidden";
             panelTr.innerHTML = `
                 <td colspan="8" class="p-4">
-                    <div class="flex items-center gap-4 bg-white p-3 rounded-lg shadow-inner border border-gray-200 max-w-3xl mx-auto">
-                        <span class="text-sm font-bold text-gray-700">📈 庫存異動調整：</span>
-                        <select class="tx-type border rounded p-1 text-sm font-medium">
-                            <option value="BUY">加碼買入 (重算平均成本)</option>
-                            <option value="SELL">獲利/停損賣出 (減少股數)</option>
+                    <div class="flex flex-wrap items-center gap-3 bg-white p-3 rounded-lg shadow-inner border border-gray-200 max-w-4xl mx-auto text-sm">
+                        <span class="font-bold text-gray-700">📈 庫存異動：</span>
+                        <div class="flex items-center gap-1">
+                            <span class="text-xs text-gray-500">日期:</span>
+                            <input type="date" class="tx-date border rounded p-1 text-xs font-medium" value="${getTodayString()}">
+                        </div>
+                        <select class="tx-type border rounded p-1 text-xs font-medium">
+                            <option value="BUY">加碼買入 (重算成本)</option>
+                            <option value="SELL">分批賣出 (結算損益)</option>
                         </select>
-                        <input type="number" class="tx-shares border rounded p-1 text-sm w-24 text-center" placeholder="異動股數">
-                        <input type="number" step="0.01" class="tx-price border rounded p-1 text-sm w-24 text-center" placeholder="交易單價">
-                        <button onclick="executeTransaction('${rowId}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-4 rounded transition shadow">確認調整</button>
+                        <input type="number" class="tx-shares border rounded p-1 text-xs w-20 text-center" placeholder="異動股數">
+                        <input type="number" step="0.01" class="tx-price border rounded p-1 text-xs w-20 text-center" placeholder="交易單價">
+                        <button onclick="executeTransaction('${rowId}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-3 rounded transition shadow">確認調整</button>
                     </div>
                 </td>
             `;
@@ -182,7 +223,6 @@
             document.getElementById(rowId + '_panel').classList.toggle('hidden');
         }
 
-        // 執行買賣異動，重算庫存並「自動壓印時間寫入流水帳」
         function executeTransaction(rowId) {
             const row = document.getElementById(rowId);
             const panel = document.getElementById(rowId + '_panel');
@@ -194,6 +234,7 @@
             let currentShares = parseFloat(currentSharesInput.value) || 0;
             let currentCost = parseFloat(currentCostInput.value) || 0;
             
+            const txDate = panel.querySelector('.tx-date').value || getTodayString();
             const txType = panel.querySelector('.tx-type').value;
             const txShares = parseFloat(panel.querySelector('.tx-shares').value) || 0;
             const txPrice = parseFloat(panel.querySelector('.tx-price').value) || 0;
@@ -202,6 +243,8 @@
                 showStatus("請輸入正確的異動股數與單價！", true);
                 return;
             }
+            
+            let pnl = 0;
             
             if(txType === "BUY") {
                 const totalCostAmount = (currentShares * currentCost) + (txShares * txPrice);
@@ -212,57 +255,152 @@
                     showStatus("錯誤：賣出股數不可大於現有持股股數！", true);
                     return;
                 }
+                pnl = Math.round((txPrice - currentCost) * txShares);
                 currentShares -= txShares;
             }
             
             currentSharesInput.value = currentShares;
             currentCostInput.value = currentCost.toFixed(2);
             
-            // 【核心擴充】生成當日時間並推入交易紀錄陣列中
-            const now = new Date();
-            const timeStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            const formattedDate = txDate.replace(/-/g, '/');
             
             const newLog = {
-                time: timeStr,
+                time: formattedDate,
                 code: stockCodeLabel,
                 type: txType === "BUY" ? "買入加碼" : "分批賣出",
                 shares: txShares,
                 price: txPrice,
-                total: Math.round(txShares * txPrice)
+                total: Math.round(txShares * txPrice),
+                pnl: txType === "SELL" ? pnl : null
             };
             
-            // 寫入前端與儲存
-            addLogToTable(newLog);
             saveHistoryLogToStorage(newLog);
 
             panel.querySelector('.tx-shares').value = '';
             panel.querySelector('.tx-price').value = '';
+            panel.querySelector('.tx-date').value = getTodayString();
             panel.classList.add('hidden');
             
             calculateDashboard();
+            // 重新載入日誌區以動態刷新篩選下拉選單與表格
+            renderLogsTable();
             saveToLocalStorage();
-            showStatus("庫存調配成功！已產生下方歷史異動流水帳清單。");
+            showStatus("庫存異動成功！");
         }
 
-        // 把交易紀錄寫到網頁最下方的 Table 中
-        function addLogToTable(log) {
-            document.getElementById('emptyLogMessage').classList.add('hidden');
+        // 核心渲染與篩選引擎
+        function renderLogsTable() {
             const tbody = document.getElementById('historyLogBody');
-            const tr = document.createElement('tr');
-            tr.className = "border-b hover:bg-gray-50 text-center";
+            tbody.innerHTML = '';
             
-            const typeColor = log.type === "買入加碼" ? "text-red-500 font-bold" : "text-green-600 font-bold";
+            const logs = JSON.parse(localStorage.getItem('smart_stock_dashboard_logs')) || [];
             
-            tr.innerHTML = `
-                <td class="p-2 text-gray-500 text-xs">${log.time}</td>
-                <td class="p-2 font-medium text-gray-800">${log.code}</td>
-                <td class="p-2 ${typeColor}">${log.type}</td>
-                <td class="p-2 font-medium">${log.shares.toLocaleString()} 股</td>
-                <td class="p-2 text-gray-600">$${log.price.toFixed(2)}</td>
-                <td class="p-2 font-semibold text-gray-700">$${log.total.toLocaleString()}</td>
-            `;
-            // 最新的一筆交易顯示在最上面
-            tbody.insertBefore(tr, tbody.firstChild);
+            // 1. 整理並更新「股票篩選下拉選單」的選項
+            const codeSelect = document.getElementById('filterCode');
+            const currentSelectedCode = codeSelect.value;
+            codeSelect.innerHTML = '<option value="ALL">全部股票</option>';
+            
+            const uniqueCodes = [...new Set(logs.map(l => l.code))].sort();
+            uniqueCodes.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.innerText = c;
+                codeSelect.appendChild(opt);
+            });
+            if(uniqueCodes.includes(currentSelectedCode)) {
+                codeSelect.value = currentSelectedCode;
+            }
+
+            if(logs.length === 0) {
+                document.getElementById('emptyLogMessage').classList.remove('hidden');
+                document.getElementById('totalRealizedPnl').innerText = "$0";
+                document.getElementById('totalRealizedPnl').className = "font-bold text-gray-700";
+                document.getElementById('filteredCount').innerText = "共 0 筆明細";
+                document.getElementById('filteredPnlSum').innerText = "$0";
+                document.getElementById('filteredPnlSum').className = "p-3 text-gray-800 text-base";
+                return;
+            }
+            document.getElementById('emptyLogMessage').classList.add('hidden');
+
+            // 2. 計算全帳戶歷史累計總損益（安全加總避免產生 NaN）
+            let grandTotalPnl = 0;
+            logs.forEach(l => {
+                if(l.pnl !== null && !isNaN(l.pnl)) grandTotalPnl += parseFloat(l.pnl);
+            });
+            const totalPnlEl = document.getElementById('totalRealizedPnl');
+            totalPnlEl.innerText = `${grandTotalPnl >= 0 ? '+' : ''}$${Math.round(grandTotalPnl).toLocaleString()}`;
+            totalPnlEl.className = `font-bold ${grandTotalPnl > 0 ? 'text-red-500' : grandTotalPnl < 0 ? 'text-green-600' : 'text-gray-700'}`;
+
+            // 3. 讀取目前的篩選條件
+            const filterDateVal = document.getElementById('filterDate').value; // 格式: YYYY-MM-DD
+            const formattedFilterDate = filterDateVal ? filterDateVal.replace(/-/g, '/') : null;
+            const filterCodeVal = document.getElementById('filterCode').value;
+
+            let displayedCount = 0;
+            let filteredPnlSum = 0;
+
+            // 4. 依新到舊排序並過濾輸出
+            const sortedLogs = [...logs].sort((a,b) => b.time.localeCompare(a.time));
+
+            sortedLogs.forEach(log => {
+                // 檢查日期篩選 (相容帶有時間和純日期的格式)
+                if(formattedFilterDate && !log.time.startsWith(formattedFilterDate)) return;
+                // 檢查股票標的篩選
+                if(filterCodeVal !== "ALL" && log.code !== filterCodeVal) return;
+
+                displayedCount++;
+                if(log.pnl !== null && !isNaN(log.pnl)) {
+                    filteredPnlSum += parseFloat(log.pnl);
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = "border-b hover:bg-gray-50 text-center";
+                
+                const typeColor = log.type === "買入加碼" ? "text-red-500 font-bold" : "text-green-600 font-bold";
+                let pnlTdHtml = `<td class="p-2 text-gray-400">--</td>`;
+                if (log.pnl !== null) {
+                    const numPnl = parseFloat(log.pnl);
+                    if (numPnl > 0) {
+                        pnlTdHtml = `<td class="p-2 text-red-500 font-bold">賺 $${Math.round(numPnl).toLocaleString()}</td>`;
+                    } else if (numPnl < 0) {
+                        pnlTdHtml = `<td class="p-2 text-green-600 font-bold">賠 $${Math.round(Math.abs(numPnl)).toLocaleString()}</td>`;
+                    } else {
+                        pnlTdHtml = `<td class="p-2 text-gray-600 font-bold">$0 (平盤)</td>`;
+                    }
+                }
+
+                tr.innerHTML = `
+                    <td class="p-2 text-gray-600 font-medium text-xs">${log.time}</td>
+                    <td class="p-2 font-medium text-gray-800 text-left pl-4">${log.code}</td>
+                    <td class="p-2 ${typeColor}">${log.type}</td>
+                    <td class="p-2 font-medium">${parseInt(log.shares).toLocaleString()} 股</td>
+                    <td class="p-2 text-gray-600">$${parseFloat(log.price).toFixed(2)}</td>
+                    <td class="p-2 font-semibold text-gray-700">$${Math.round(log.total).toLocaleString()}</td>
+                    ${pnlTdHtml}
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // 5. 更新底部動態加減總小計行
+            document.getElementById('filteredCount').innerText = `已顯示 ${displayedCount} 筆明細`;
+            const sumEl = document.getElementById('filteredPnlSum');
+            sumEl.innerText = `${filteredPnlSum >= 0 ? '+' : ''}$${Math.round(filteredPnlSum).toLocaleString()}`;
+            sumEl.className = `p-3 text-base font-bold ${filteredPnlSum > 0 ? 'text-red-500' : filteredPnlSum < 0 ? 'text-green-600' : 'text-gray-800'}`;
+        }
+
+        function filterLogs() {
+            renderLogsTable();
+        }
+
+        function resetFilters() {
+            document.getElementById('filterDate').value = '';
+            document.getElementById('filterCode').value = 'ALL';
+            renderLogsTable();
+        }
+
+        function manualSave() {
+            saveToLocalStorage();
+            showStatus("💾 內政數據與流水帳本已成功手動同步存檔至本機瀏覽器！");
         }
 
         function deleteRow(button) {
@@ -277,7 +415,6 @@
             saveToLocalStorage();
         }
 
-        // 核心動態看板計算
         function calculateDashboard() {
             const rows = document.querySelectorAll('.stock-row');
             let computedTotalCapital = 0;
@@ -353,7 +490,6 @@
             });
         }
 
-        // 多防護網域高速檢索機制
         async function fetchCurrentPrices() {
             const rows = document.querySelectorAll('.stock-row');
             if(rows.length === 0) return;
@@ -366,7 +502,7 @@
             });
 
             if(targetStocks.length === 0) return;
-            showStatus("⚡ 正在發動多管道網域交叉檢索即時股價...");
+            showStatus("⚡ 盤中高速交叉檢索最新即時股價中...");
 
             for (let item of targetStocks) {
                 let p_success = false;
@@ -413,13 +549,10 @@
             }
 
             calculateDashboard();
-            saveToLocalStorage(); // 更新完市價也一併覆蓋存檔
-            showStatus("✅ 全數個股股價加載完成！多網域串接防護已啟動。");
+            saveToLocalStorage();
+            showStatus("✅ 股價全面刷新完成！");
         }
 
-        // ================= 【LocalStorage 核心功能常駐】 =================
-        
-        // 1. 儲存目前持股部位
         function saveToLocalStorage() {
             const rows = document.querySelectorAll('.stock-row');
             const dataArr = [];
@@ -435,39 +568,29 @@
             localStorage.setItem('smart_stock_dashboard_portfolio', JSON.stringify(dataArr));
         }
 
-        // 2. 累加儲存歷史交易明細
         function saveHistoryLogToStorage(newLog) {
             let logs = JSON.parse(localStorage.getItem('smart_stock_dashboard_logs')) || [];
             logs.push(newLog);
             localStorage.setItem('smart_stock_dashboard_logs', JSON.stringify(logs));
         }
 
-        // 3. 清空歷史交易紀錄
         function clearHistoryLog() {
-            if(confirm("確定要刪除所有的買賣異動歷史紀錄嗎？(此操作不可恢復)")) {
+            if(confirm("確定要刪除所有的買賣損益歷史紀錄嗎？")) {
                 localStorage.removeItem('smart_stock_dashboard_logs');
-                document.getElementById('historyLogBody').innerHTML = '';
-                document.getElementById('emptyLogMessage').classList.remove('hidden');
-                showStatus("歷史交易紀錄清空完畢。");
+                resetFilters();
+                showStatus("歷史紀錄已清空。");
             }
         }
 
-        // 4. 網頁開啟時，自動將前次的資料與流水帳完整載入
         window.onload = function() {
-            // 載入庫存部位
             const savedPortfolio = JSON.parse(localStorage.getItem('smart_stock_dashboard_portfolio')) || [];
             if(savedPortfolio.length > 0) {
                 savedPortfolio.forEach(item => addStockRow(item));
                 calculateDashboard();
-                // 在背景悄悄重整最新市價
                 setTimeout(fetchCurrentPrices, 500);
             }
-
-            // 載入歷史流水帳
-            const savedLogs = JSON.parse(localStorage.getItem('smart_stock_dashboard_logs')) || [];
-            if(savedLogs.length > 0) {
-                savedLogs.forEach(log => addLogToTable(log));
-            }
+            // 初始化渲染歷史清單、計算總損益與動態小計
+            renderLogsTable();
         };
     </script>
 </body>
