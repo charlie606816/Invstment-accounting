@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能庫存動態即時看板</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">📊 智能庫存動態即時看板</h1>
+        
+        <div class="bg-white p-6 rounded-xl shadow-md mb-6 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">投入總本金 (元) <span class="text-xs text-gray-400">(依庫存自動計算)</span></label>
+                <input type="text" id="totalCapital" readonly value="0" class="w-full bg-gray-100 border border-gray-300 rounded-lg p-2 font-bold text-gray-600 focus:outline-none">
+            </div>
+            <div class="col-span-2">
+                <div class="flex gap-2">
+                    <button onclick="addStockRow()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition whitespace-nowrap">
+                        ➕ 新增股票
+                    </button>
+                    <button onclick="fetchCurrentPrices()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
+                        🔄 多網域同步更新股價
+                    </button>
+                </div>
+                <div id="statusMessage" class="text-xs text-gray-500 mt-1 h-4 font-medium"></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-md overflow-hidden mb-6">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-800 text-white">
+                            <th class="p-3 text-center">代號/名稱</th>
+                            <th class="p-3 text-center">持股股數</th>
+                            <th class="p-3 text-center">平均成本 (元)</th>
+                            <th class="p-3 text-center">當下股價 (元)</th>
+                            <th class="p-3 text-center">庫存漲跌幅</th>
+                            <th class="p-3 text-center">目前市值</th>
+                            <th class="p-3 text-center">本金占比</th>
+                            <th class="p-3 text-center">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stockTableBody">
+                        </tbody>
+                </table>
+            </div>
+            <div id="emptyMessage" class="text-center p-8 text-gray-400">
+                目前無庫存資料，請點擊上方「➕ 新增股票」開始建立部位。
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div class="bg-white p-6 rounded-xl shadow-md h-96 flex flex-col justify-between">
+                <h3 class="text-lg font-bold text-gray-700 text-center mb-2">🍰 庫存每支股票的本金持有占比 (%)</h3>
+                <div class="relative flex-1 min-h-0 w-full flex justify-center items-center">
+                    <canvas id="weightChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-md h-96 flex flex-col justify-between">
+                <h3 class="text-lg font-bold text-gray-700 text-center mb-2">📈 當日個股相較成本之漲跌幅 (%)</h3>
+                <div class="relative flex-1 min-h-0 w-full">
+                    <canvas id="returnChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-lg font-bold text-gray-700 flex items-center gap-2">📜 歷史交易紀錄明細流水帳</h3>
+                <button onclick="clearHistoryLog()" class="text-xs bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-600 py-1 px-3 rounded border transition">🗑️ 清空歷史紀錄</button>
+            </div>
+            <div class="overflow-x-auto max-h-64 overflow-y-auto">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-gray-100 text-gray-600 font-semibold border-b">
+                            <th class="p-2 text-center">交易時間</th>
+                            <th class="p-2 text-center">股票標的</th>
+                            <th class="p-2 text-center">交易類型</th>
+                            <th class="p-2 text-center">異動股數</th>
+                            <th class="p-2 text-center">交易單價</th>
+                            <th class="p-2 text-center">交易總額</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyLogBody">
+                        </tbody>
+                </table>
+                <div id="emptyLogMessage" class="text-center p-6 text-gray-400 text-xs">
+                    暫無任何買賣異動紀錄，進行「交易異動」調整後將在此自動記錄。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let weightChartInstance = null;
+        let returnChartInstance = null;
+
+        // 股票代號對照中文名稱資料庫
+        const twStockDatabase = {
+            "0056": "元大高股息", "00878": "國泰永續高股息", "00919": "群益台灣精選高基", 
+            "0050": "元大台灣50", "2330": "台積電", "3661": "世芯-KY", "2454": "聯發科", 
+            "2317": "鴻海", "2303": "聯電", "2382": "廣達", "3231": "緯創", "6515": "穎崴"
+        };
+
+        function showStatus(msg, isError = false) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.innerText = msg;
+            statusEl.className = `text-xs mt-1 h-4 font-medium ${isError ? 'text-red-500' : 'text-emerald-600'}`;
+        }
+
+        // 新增股票列 (可帶入既有資料)
+        function addStockRow(savedData = null) {
+            document.getElementById('emptyMessage').classList.add('hidden');
+            const tbody = document.getElementById('stockTableBody');
+            const rowId = savedData ? savedData.id : 'row_' + Date.now();
+            
+            const tr = document.createElement('tr');
+            tr.id = rowId;
+            tr.className = "stock-row border-b border-gray-200 hover:bg-gray-50 transition";
+            
+            tr.innerHTML = `
+                <td class="p-3 text-center"><input type="text" class="stock-code w-36 border rounded text-center p-1 font-semibold text-blue-600 text-sm" placeholder="例如: 0056" value="${savedData ? savedData.code : ''}" onchange="onCodeChange(this)"></td>
+                <td class="p-3 text-center"><input type="number" class="shares w-24 border rounded text-center p-1 font-medium" placeholder="股數" value="${savedData ? savedData.shares : ''}" oninput="onInputDataUpdate()"></td>
+                <td class="p-3 text-center"><input type="number" step="0.01" class="cost w-24 border rounded text-center p-1 font-medium" placeholder="成本" value="${savedData ? savedData.cost : ''}" oninput="onInputDataUpdate()"></td>
+                <td class="p-3 text-center"><input type="number" step="0.01" class="price w-24 border rounded text-center p-1 bg-gray-50 text-gray-600 font-bold" placeholder="自動抓取" value="${savedData ? savedData.price : ''}" readonly></td>
+                <td class="p-3 text-center font-bold return-pct">--</td>
+                <td class="p-3 text-center market-val">--</td>
+                <td class="p-3 text-center font-bold weight-pct">--</td>
+                <td class="p-3 text-center space-x-1">
+                    <button onclick="toggleTransactionPanel('${rowId}')" class="bg-blue-50 hover:bg-blue-100 text-blue-600 p-1 px-2 rounded text-sm font-medium transition">🔄 交易異動</button>
+                    <button onclick="deleteRow(this)" class="bg-red-50 hover:bg-red-100 text-red-500 p-1 px-2 rounded text-sm transition">🗑️ 刪除</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+
+            const panelTr = document.createElement('tr');
+            panelTr.id = rowId + '_panel';
+            panelTr.className = "bg-gray-50 border-b border-gray-200 hidden";
+            panelTr.innerHTML = `
+                <td colspan="8" class="p-4">
+                    <div class="flex items-center gap-4 bg-white p-3 rounded-lg shadow-inner border border-gray-200 max-w-3xl mx-auto">
+                        <span class="text-sm font-bold text-gray-700">📈 庫存異動調整：</span>
+                        <select class="tx-type border rounded p-1 text-sm font-medium">
+                            <option value="BUY">加碼買入 (重算平均成本)</option>
+                            <option value="SELL">獲利/停損賣出 (減少股數)</option>
+                        </select>
+                        <input type="number" class="tx-shares border rounded p-1 text-sm w-24 text-center" placeholder="異動股數">
+                        <input type="number" step="0.01" class="tx-price border rounded p-1 text-sm w-24 text-center" placeholder="交易單價">
+                        <button onclick="executeTransaction('${rowId}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-4 rounded transition shadow">確認調整</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(panelTr);
+            
+            if(!savedData) {
+                showStatus("已新增空白個股欄位");
+                saveToLocalStorage();
+            }
+        }
+
+        function onCodeChange(input) {
+            let val = input.value.trim().toUpperCase();
+            if(val.includes('.')) val = val.split('.')[0];
+            input.value = val;
+            
+            if(twStockDatabase[val]) {
+                input.value = `${val} ${twStockDatabase[val]}`;
+            }
+            fetchCurrentPrices();
+        }
+
+        function onInputDataUpdate() {
+            calculateDashboard();
+            saveToLocalStorage();
+        }
+
+        function toggleTransactionPanel(rowId) {
+            document.getElementById(rowId + '_panel').classList.toggle('hidden');
+        }
+
+        // 執行買賣異動，重算庫存並「自動壓印時間寫入流水帳」
+        function executeTransaction(rowId) {
+            const row = document.getElementById(rowId);
+            const panel = document.getElementById(rowId + '_panel');
+            
+            const stockCodeLabel = row.querySelector('.stock-code').value.trim() || '未命名個股';
+            const currentSharesInput = row.querySelector('.shares');
+            const currentCostInput = row.querySelector('.cost');
+            
+            let currentShares = parseFloat(currentSharesInput.value) || 0;
+            let currentCost = parseFloat(currentCostInput.value) || 0;
+            
+            const txType = panel.querySelector('.tx-type').value;
+            const txShares = parseFloat(panel.querySelector('.tx-shares').value) || 0;
+            const txPrice = parseFloat(panel.querySelector('.tx-price').value) || 0;
+            
+            if(txShares <= 0 || txPrice <= 0) {
+                showStatus("請輸入正確的異動股數與單價！", true);
+                return;
+            }
+            
+            if(txType === "BUY") {
+                const totalCostAmount = (currentShares * currentCost) + (txShares * txPrice);
+                currentShares += txShares;
+                currentCost = currentShares > 0 ? (totalCostAmount / currentShares) : 0;
+            } else if(txType === "SELL") {
+                if(txShares > currentShares) {
+                    showStatus("錯誤：賣出股數不可大於現有持股股數！", true);
+                    return;
+                }
+                currentShares -= txShares;
+            }
+            
+            currentSharesInput.value = currentShares;
+            currentCostInput.value = currentCost.toFixed(2);
+            
+            // 【核心擴充】生成當日時間並推入交易紀錄陣列中
+            const now = new Date();
+            const timeStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            
+            const newLog = {
+                time: timeStr,
+                code: stockCodeLabel,
+                type: txType === "BUY" ? "買入加碼" : "分批賣出",
+                shares: txShares,
+                price: txPrice,
+                total: Math.round(txShares * txPrice)
+            };
+            
+            // 寫入前端與儲存
+            addLogToTable(newLog);
+            saveHistoryLogToStorage(newLog);
+
+            panel.querySelector('.tx-shares').value = '';
+            panel.querySelector('.tx-price').value = '';
+            panel.classList.add('hidden');
+            
+            calculateDashboard();
+            saveToLocalStorage();
+            showStatus("庫存調配成功！已產生下方歷史異動流水帳清單。");
+        }
+
+        // 把交易紀錄寫到網頁最下方的 Table 中
+        function addLogToTable(log) {
+            document.getElementById('emptyLogMessage').classList.add('hidden');
+            const tbody = document.getElementById('historyLogBody');
+            const tr = document.createElement('tr');
+            tr.className = "border-b hover:bg-gray-50 text-center";
+            
+            const typeColor = log.type === "買入加碼" ? "text-red-500 font-bold" : "text-green-600 font-bold";
+            
+            tr.innerHTML = `
+                <td class="p-2 text-gray-500 text-xs">${log.time}</td>
+                <td class="p-2 font-medium text-gray-800">${log.code}</td>
+                <td class="p-2 ${typeColor}">${log.type}</td>
+                <td class="p-2 font-medium">${log.shares.toLocaleString()} 股</td>
+                <td class="p-2 text-gray-600">$${log.price.toFixed(2)}</td>
+                <td class="p-2 font-semibold text-gray-700">$${log.total.toLocaleString()}</td>
+            `;
+            // 最新的一筆交易顯示在最上面
+            tbody.insertBefore(tr, tbody.firstChild);
+        }
+
+        function deleteRow(button) {
+            const tr = button.closest('tr');
+            document.getElementById(tr.id + '_panel')?.remove();
+            tr.remove();
+            
+            if (document.querySelectorAll('.stock-row').length === 0) {
+                document.getElementById('emptyMessage').classList.remove('hidden');
+            }
+            calculateDashboard();
+            saveToLocalStorage();
+        }
+
+        // 核心動態看板計算
+        function calculateDashboard() {
+            const rows = document.querySelectorAll('.stock-row');
+            let computedTotalCapital = 0;
+            
+            rows.forEach(row => {
+                const shares = parseFloat(row.querySelector('.shares').value) || 0;
+                const cost = parseFloat(row.querySelector('.cost').value) || 0;
+                computedTotalCapital += (shares * cost);
+            });
+
+            document.getElementById('totalCapital').value = computedTotalCapital > 0 ? Math.round(computedTotalCapital).toLocaleString() : 0;
+
+            const labels = []; const weights = []; const returns = []; const barColors = [];
+
+            rows.forEach(row => {
+                const codeInput = row.querySelector('.stock-code').value.trim();
+                const code = codeInput ? codeInput : '未命名';
+                const shares = parseFloat(row.querySelector('.shares').value) || 0;
+                const cost = parseFloat(row.querySelector('.cost').value) || 0;
+                const price = parseFloat(row.querySelector('.price').value) || 0;
+
+                const marketValue = shares * price;
+                const returnPct = cost > 0 ? ((price - cost) / cost) * 100 : 0;
+                const weightPct = computedTotalCapital > 0 ? (marketValue / computedTotalCapital) * 100 : 0;
+
+                row.querySelector('.market-val').innerText = `$${Math.round(marketValue).toLocaleString()}`;
+                
+                const returnTd = row.querySelector('.return-pct');
+                returnTd.innerText = `${returnPct >= 0 ? '+' : ''}${returnPct.toFixed(2)}%`;
+                returnTd.className = `p-3 text-center font-bold return-pct ${returnPct >= 0 ? 'text-red-500' : 'text-green-500'}`;
+
+                row.querySelector('.weight-pct').innerText = `${weightPct.toFixed(2)}%`;
+
+                labels.push(code);
+                weights.push(weightPct.toFixed(2));
+                returns.push(returnPct.toFixed(2));
+                barColors.push(returnPct >= 0 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(34, 197, 94, 0.7)');
+            });
+
+            updateCharts(labels, weights, returns, barColors);
+        }
+
+        function updateCharts(labels, weights, returns, barColors) {
+            if (weightChartInstance) weightChartInstance.destroy();
+            if (returnChartInstance) returnChartInstance.destroy();
+            if (labels.length === 0) return;
+
+            const ctxWeight = document.getElementById('weightChart').getContext('2d');
+            weightChartInstance = new Chart(ctxWeight, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: weights,
+                        backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6B7280', '#14B8A6', '#F43F5E']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const ctxReturn = document.getElementById('returnChart').getContext('2d');
+            returnChartInstance = new Chart(ctxReturn, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{ label: '漲跌幅 (%)', data: returns, backgroundColor: barColors }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { ticks: { callback: value => value + '%' } } }
+                }
+            });
+        }
+
+        // 多防護網域高速檢索機制
+        async function fetchCurrentPrices() {
+            const rows = document.querySelectorAll('.stock-row');
+            if(rows.length === 0) return;
+
+            const targetStocks = [];
+            rows.forEach(row => {
+                const rawVal = row.querySelector('.stock-code').value.trim();
+                const match = rawVal.match(/\d+/);
+                if(match) targetStocks.push({ code: match[0], row: row });
+            });
+
+            if(targetStocks.length === 0) return;
+            showStatus("⚡ 正在發動多管道網域交叉檢索即時股價...");
+
+            for (let item of targetStocks) {
+                let p_success = false;
+                try {
+                    const response = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${item.code}&start_date=${new Date(Date.now() - 5*24*60*60*1000).toISOString().split('T')[0]}`);
+                    if (response.ok) {
+                        const resJson = await response.json();
+                        if (resJson.data && resJson.data.length > 0) {
+                            const lastRecord = resJson.data[resJson.data.length - 1];
+                            const fetchedPrice = lastRecord.close || lastRecord.colse;
+                            if (fetchedPrice) {
+                                item.row.querySelector('.price').value = fetchedPrice;
+                                p_success = true;
+                            }
+                        }
+                    }
+                } catch(e) {}
+
+                if (!p_success) {
+                    try {
+                        const yUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${item.code}.TW`;
+                        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yUrl)}`;
+                        const yResponse = await fetch(proxyUrl);
+                        if (yResponse.ok) {
+                            const yOuter = await yResponse.json();
+                            const yData = JSON.parse(yOuter.contents);
+                            if (yData?.quoteResponse?.result?.[0]) {
+                                const stockInfo = yData.quoteResponse.result[0];
+                                const fetchedPrice = stockInfo.regularMarketPrice || stockInfo.previousClose;
+                                if (fetchedPrice) {
+                                    item.row.querySelector('.price').value = fetchedPrice;
+                                    p_success = true;
+                                }
+                            }
+                        }
+                    } catch(e) {}
+                }
+                
+                const priceField = item.row.querySelector('.price');
+                if (!priceField.value || priceField.value === "0") {
+                    const costVal = parseFloat(item.row.querySelector('.cost').value);
+                    if (costVal) priceField.value = costVal;
+                }
+            }
+
+            calculateDashboard();
+            saveToLocalStorage(); // 更新完市價也一併覆蓋存檔
+            showStatus("✅ 全數個股股價加載完成！多網域串接防護已啟動。");
+        }
+
+        // ================= 【LocalStorage 核心功能常駐】 =================
+        
+        // 1. 儲存目前持股部位
+        function saveToLocalStorage() {
+            const rows = document.querySelectorAll('.stock-row');
+            const dataArr = [];
+            rows.forEach(row => {
+                dataArr.push({
+                    id: row.id,
+                    code: row.querySelector('.stock-code').value.trim(),
+                    shares: row.querySelector('.shares').value,
+                    cost: row.querySelector('.cost').value,
+                    price: row.querySelector('.price').value
+                });
+            });
+            localStorage.setItem('smart_stock_dashboard_portfolio', JSON.stringify(dataArr));
+        }
+
+        // 2. 累加儲存歷史交易明細
+        function saveHistoryLogToStorage(newLog) {
+            let logs = JSON.parse(localStorage.getItem('smart_stock_dashboard_logs')) || [];
+            logs.push(newLog);
+            localStorage.setItem('smart_stock_dashboard_logs', JSON.stringify(logs));
+        }
+
+        // 3. 清空歷史交易紀錄
+        function clearHistoryLog() {
+            if(confirm("確定要刪除所有的買賣異動歷史紀錄嗎？(此操作不可恢復)")) {
+                localStorage.removeItem('smart_stock_dashboard_logs');
+                document.getElementById('historyLogBody').innerHTML = '';
+                document.getElementById('emptyLogMessage').classList.remove('hidden');
+                showStatus("歷史交易紀錄清空完畢。");
+            }
+        }
+
+        // 4. 網頁開啟時，自動將前次的資料與流水帳完整載入
+        window.onload = function() {
+            // 載入庫存部位
+            const savedPortfolio = JSON.parse(localStorage.getItem('smart_stock_dashboard_portfolio')) || [];
+            if(savedPortfolio.length > 0) {
+                savedPortfolio.forEach(item => addStockRow(item));
+                calculateDashboard();
+                // 在背景悄悄重整最新市價
+                setTimeout(fetchCurrentPrices, 500);
+            }
+
+            // 載入歷史流水帳
+            const savedLogs = JSON.parse(localStorage.getItem('smart_stock_dashboard_logs')) || [];
+            if(savedLogs.length > 0) {
+                savedLogs.forEach(log => addLogToTable(log));
+            }
+        };
+    </script>
+</body>
+</html>
