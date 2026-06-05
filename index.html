@@ -10,18 +10,18 @@
         <h1 class="text-2xl font-bold mb-6">🦊 智能庫存動態紀錄表</h1>
         
         <div class="bg-white p-6 rounded-xl shadow mb-6">
-            <div class="grid grid-cols-4 gap-4 mb-4">
+            <div class="grid grid-cols-3 gap-4 mb-4">
                 <div class="p-4 bg-gray-50 rounded">本金總額: <span id="totalCapital">0</span></div>
                 <div class="p-4 bg-gray-50 rounded">目前總市值: <span id="totalValue">0</span></div>
                 <div class="p-4 bg-gray-50 rounded">總損益: <span id="totalProfit">0</span></div>
             </div>
             <div class="flex gap-4">
                 <button onclick="addStockRow()" class="bg-emerald-600 text-white px-6 py-2 rounded-lg">➕ 新增標的</button>
-                <button onclick="saveData()" class="bg-purple-600 text-white px-6 py-2 rounded-lg">💾 手動存檔</button>
+                <button onclick="saveData()" class="bg-purple-600 text-white px-6 py-2 rounded-lg">💾 手動儲存所有資料</button>
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow overflow-hidden">
+        <div class="bg-white rounded-xl shadow overflow-hidden mb-6">
             <table class="w-full text-left">
                 <thead class="bg-slate-800 text-white">
                     <tr>
@@ -36,10 +36,26 @@
                 <tbody id="stockTableBody"></tbody>
             </table>
         </div>
+
+        <div class="bg-white p-6 rounded-xl shadow">
+            <h2 class="text-xl font-bold mb-4">📜 歷史交易紀錄</h2>
+            <table class="w-full text-left">
+                <thead class="bg-gray-200">
+                    <tr>
+                        <th class="p-2">日期</th>
+                        <th class="p-2">股票</th>
+                        <th class="p-2">類型</th>
+                        <th class="p-2">金額</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTableBody"></tbody>
+            </table>
+        </div>
     </div>
 
     <script>
         let stocks = JSON.parse(localStorage.getItem('my_stocks')) || [];
+        let history = JSON.parse(localStorage.getItem('my_history')) || [];
 
         function render() {
             const tbody = document.getElementById('stockTableBody');
@@ -52,7 +68,6 @@
                 const costVal = s.shares * s.cost;
                 totalCap += costVal;
                 totalVal += marketVal;
-
                 const profit = s.current > 0 ? (marketVal - costVal).toFixed(0) : '-';
                 
                 row.innerHTML = `
@@ -68,11 +83,18 @@
             document.getElementById('totalCapital').innerText = totalCap;
             document.getElementById('totalValue').innerText = totalVal;
             document.getElementById('totalProfit').innerText = (totalVal - totalCap).toFixed(0);
+
+            // 渲染歷史紀錄
+            const hbody = document.getElementById('historyTableBody');
+            hbody.innerHTML = history.map(h => `<tr><td class="p-2">${h.date}</td><td class="p-2">${h.name}</td><td class="p-2">${h.type}</td><td class="p-2">${h.amount}</td></tr>`).join('');
         }
 
         function addStockRow() { stocks.push({name: '', shares: 0, cost: 0, current: 0}); render(); }
         function del(i) { stocks.splice(i, 1); render(); }
-        function saveData() { localStorage.setItem('my_stocks', JSON.stringify(stocks)); alert('已儲存！'); }
+        function saveData() { 
+            localStorage.setItem('my_stocks', JSON.stringify(stocks)); 
+            alert('已成功儲存您的庫存狀態！');
+        }
         
         render();
     </script>
