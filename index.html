@@ -2,53 +2,67 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>個人智能庫存紀錄表</title>
+    <title>智能庫存動態看板</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 p-6">
     <div class="max-w-6xl mx-auto">
-        <h1 class="text-2xl font-bold mb-6">🦊 智能庫存動態紀錄表</h1>
+        <h1 class="text-2xl font-bold mb-6">📊 智能庫存動態即時看板</h1>
         
         <div class="bg-white p-6 rounded-xl shadow mb-6">
-            <div class="grid grid-cols-3 gap-4 mb-4">
-                <div class="p-4 bg-gray-50 rounded">本金總額: <span id="totalCapital">0</span></div>
-                <div class="p-4 bg-gray-50 rounded">目前總市值: <span id="totalValue">0</span></div>
-                <div class="p-4 bg-gray-50 rounded">總損益: <span id="totalProfit">0</span></div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div class="bg-gray-50 p-4 rounded">
+                    <label class="block text-xs text-gray-500">投入總本金 (元)</label>
+                    <span id="totalCapital" class="text-xl font-bold">0</span>
+                </div>
+                <div class="bg-gray-50 p-4 rounded">
+                    <label class="block text-xs text-gray-500">目前總現值 (元)</label>
+                    <span id="totalValue" class="text-xl font-bold">0</span>
+                </div>
+                <div class="bg-gray-50 p-4 rounded">
+                    <label class="block text-xs text-gray-500">庫存總損益 (元)</label>
+                    <span id="totalProfit" class="text-xl font-bold">0</span>
+                </div>
+                <div class="bg-gray-50 p-4 rounded">
+                    <label class="block text-xs text-gray-500">損益百分比</label>
+                    <span id="totalPercent" class="text-xl font-bold">0.00%</span>
+                </div>
             </div>
             <div class="flex gap-4">
-                <button onclick="addStockRow()" class="bg-emerald-600 text-white px-6 py-2 rounded-lg">➕ 新增標的</button>
-                <button onclick="saveData()" class="bg-purple-600 text-white px-6 py-2 rounded-lg">💾 手動儲存所有資料</button>
+                <button onclick="addStockRow()" class="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold">➕ 新增股票</button>
+                <button onclick="saveData()" class="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold">💾 手動即時存檔</button>
             </div>
         </div>
 
         <div class="bg-white rounded-xl shadow overflow-hidden mb-6">
             <table class="w-full text-left">
-                <thead class="bg-slate-800 text-white">
+                <thead class="bg-slate-800 text-white text-sm">
                     <tr>
-                        <th class="p-4">股票代號</th>
-                        <th class="p-4">股數</th>
-                        <th class="p-4">成本</th>
-                        <th class="p-4">當下股價</th>
-                        <th class="p-4">庫存損益</th>
+                        <th class="p-4">代號/名稱</th>
+                        <th class="p-4">持股股數</th>
+                        <th class="p-4">平均成本 (元)</th>
+                        <th class="p-4">當下股價 (元)</th>
+                        <th class="p-4">庫存漲跌幅</th>
                         <th class="p-4">操作</th>
                     </tr>
                 </thead>
-                <tbody id="stockTableBody"></tbody>
+                <tbody id="stockTableBody" class="text-sm"></tbody>
             </table>
         </div>
 
         <div class="bg-white p-6 rounded-xl shadow">
-            <h2 class="text-xl font-bold mb-4">📜 歷史交易紀錄</h2>
-            <table class="w-full text-left">
-                <thead class="bg-gray-200">
+            <h2 class="text-lg font-bold mb-4">📜 歷史交易紀錄與實現損益明細</h2>
+            <table class="w-full text-left border">
+                <thead class="bg-gray-100 text-sm">
                     <tr>
-                        <th class="p-2">日期</th>
-                        <th class="p-2">股票</th>
-                        <th class="p-2">類型</th>
-                        <th class="p-2">金額</th>
+                        <th class="p-3 border">日期</th>
+                        <th class="p-3 border">標的</th>
+                        <th class="p-3 border">類型</th>
+                        <th class="p-3 border">股數</th>
+                        <th class="p-3 border">總額</th>
                     </tr>
                 </thead>
-                <tbody id="historyTableBody"></tbody>
+                <tbody id="historyTableBody" class="text-sm"></tbody>
             </table>
         </div>
     </div>
@@ -60,42 +74,40 @@
         function render() {
             const tbody = document.getElementById('stockTableBody');
             tbody.innerHTML = '';
-            let totalCap = 0, totalVal = 0;
+            let tCap = 0, tVal = 0;
 
             stocks.forEach((s, i) => {
                 const row = document.createElement('tr');
-                const marketVal = s.shares * s.current;
-                const costVal = s.shares * s.cost;
-                totalCap += costVal;
-                totalVal += marketVal;
-                const profit = s.current > 0 ? (marketVal - costVal).toFixed(0) : '-';
+                const mVal = s.shares * s.current;
+                const cVal = s.shares * s.cost;
+                tCap += cVal; tVal += mVal;
+                const diff = s.cost > 0 ? (((s.current - s.cost) / s.cost) * 100).toFixed(2) + '%' : '-';
                 
                 row.innerHTML = `
-                    <td class="p-4"><input type="text" value="${s.name}" onchange="stocks[${i}].name=this.value" class="border p-1 w-20"></td>
+                    <td class="p-4"><input type="text" value="${s.name}" onchange="stocks[${i}].name=this.value" class="border p-1 w-24"></td>
                     <td class="p-4"><input type="number" value="${s.shares}" onchange="stocks[${i}].shares=Number(this.value);render()" class="border p-1 w-20"></td>
                     <td class="p-4"><input type="number" value="${s.cost}" onchange="stocks[${i}].cost=Number(this.value);render()" class="border p-1 w-20"></td>
                     <td class="p-4"><input type="number" value="${s.current}" onchange="stocks[${i}].current=Number(this.value);render()" class="border p-1 w-20"></td>
-                    <td class="p-4 font-bold ${profit >= 0 ? 'text-red-500' : 'text-green-500'}">${profit}</td>
-                    <td class="p-4"><button onclick="del(${i})" class="text-red-500">刪除</button></td>
+                    <td class="p-4 font-bold ${s.current >= s.cost ? 'text-red-600' : 'text-emerald-600'}">${diff}</td>
+                    <td class="p-4"><button onclick="del(${i})" class="text-red-500 font-bold">🗑️ 刪除</button></td>
                 `;
                 tbody.appendChild(row);
             });
-            document.getElementById('totalCapital').innerText = totalCap;
-            document.getElementById('totalValue').innerText = totalVal;
-            document.getElementById('totalProfit').innerText = (totalVal - totalCap).toFixed(0);
-
-            // 渲染歷史紀錄
+            document.getElementById('totalCapital').innerText = tCap.toLocaleString();
+            document.getElementById('totalValue').innerText = tVal.toLocaleString();
+            document.getElementById('totalProfit').innerText = (tVal - tCap).toLocaleString();
+            document.getElementById('totalPercent').innerText = tCap > 0 ? (((tVal - tCap) / tCap) * 100).toFixed(2) + '%' : '0.00%';
+            
             const hbody = document.getElementById('historyTableBody');
-            hbody.innerHTML = history.map(h => `<tr><td class="p-2">${h.date}</td><td class="p-2">${h.name}</td><td class="p-2">${h.type}</td><td class="p-2">${h.amount}</td></tr>`).join('');
+            hbody.innerHTML = history.map(h => `<tr><td class="p-3 border">${h.date}</td><td class="p-3 border">${h.name}</td><td class="p-3 border">${h.type}</td><td class="p-3 border">${h.shares}</td><td class="p-3 border">${h.total}</td></tr>`).join('');
         }
 
         function addStockRow() { stocks.push({name: '', shares: 0, cost: 0, current: 0}); render(); }
         function del(i) { stocks.splice(i, 1); render(); }
         function saveData() { 
             localStorage.setItem('my_stocks', JSON.stringify(stocks)); 
-            alert('已成功儲存您的庫存狀態！');
+            alert('已手動存檔！'); 
         }
-        
         render();
     </script>
 </body>
