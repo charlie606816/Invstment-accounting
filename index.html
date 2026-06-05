@@ -11,7 +11,7 @@
     <div class="max-w-7xl mx-auto">
         
         <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center flex items-center justify-center gap-2">
-            <span>🦊</span> 智能庫存動態即時看板
+            <span>🦊</span> 智能庫存動態即時看板 (真實聯網版)
         </h1>
         
         <div class="bg-white p-6 rounded-xl shadow-md mb-6">
@@ -39,7 +39,7 @@
                         ➕ 新增股票
                     </button>
                     <button onclick="fetchCurrentPrices()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow transition cursor-pointer">
-                        🔄 同步更新股價
+                        🔄 全自動同步最新股價
                     </button>
                     
                     <button onclick="forceResetStorage()" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-4 rounded-lg shadow transition cursor-pointer border-2 border-violet-300">
@@ -62,7 +62,7 @@
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="bg-slate-800 text-white text-sm font-semibold">
-                            <th class="p-4 text-center whitespace-nowrap">代號/名稱</th>
+                            <th class="p-4 text-center whitespace-nowrap">股票代號/名稱 (輸入代號自動查)</th>
                             <th class="p-4 text-center whitespace-nowrap">持股股數</th>
                             <th class="p-4 text-center whitespace-nowrap">平均成本 (元)</th>
                             <th class="p-4 text-center whitespace-nowrap">當下股價 (元)</th>
@@ -181,7 +181,7 @@
         let barChartInstance = null;
         const chartColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
-        // 預設安全的初始資料集
+        // 預設初始資料集
         const defaultStocks = [
             { name: '0056 元大高股息', shares: 3449, cost: 37.33, current: 51.8 },
             { name: '00878 國泰永續高股息', shares: 3149, cost: 22.01, current: 32.32 },
@@ -231,23 +231,19 @@
             });
         }
 
-        // 🚨 智慧修復改良版：不再盲目清除你新增好並存檔的資料
+        // 一鍵格式健檢
         function forceResetStorage() {
-            if (confirm("是否執行網頁深度健檢？系統將保留您辛苦記下的庫存與歷史帳本，只去清洗校正讓網頁卡死出不來的損壞格式錯誤！")) {
+            if (confirm("是否執行網頁深度健檢？系統將保留您辛苦記下的庫存與歷史帳本，只去清洗校正格式錯誤！")) {
                 try {
-                    // 1. 抓出目前快取
                     const savedStocks = localStorage.getItem('accounting_stocks');
                     const savedHistory = localStorage.getItem('accounting_history');
-                    
                     if (savedStocks) stocks = JSON.parse(savedStocks);
                     if (savedHistory) historyLog = JSON.parse(savedHistory);
                 } catch(e) {}
 
-                // 2. 如果本來就完全空的，才放預設值
                 if (!Array.isArray(stocks) || stocks.length === 0) stocks = [...defaultStocks];
                 if (!Array.isArray(historyLog)) historyLog = [];
 
-                // 3. 執行清洗：把所有可能引發 NaN 卡死畫面的數值全部強制轉為安全數字
                 stocks = stocks.map(s => ({
                     name: s.name || '',
                     shares: isNaN(Number(s.shares)) ? 0 : Number(s.shares),
@@ -256,12 +252,57 @@
                 }));
                 sanitizeHistory();
 
-                // 4. 重新存入與渲染
                 autoSave();
                 renderTable();
                 updateSelectOptions();
                 applyFilters();
                 showStatus("✅ 網頁格式校正完成！您原本紀錄的股票已成功保留與重現！");
+            }
+        }
+
+        // 🌟 核心：輸入代號自動查台股名稱與即時股價
+        async function checkTaiwanStock(index, inputElement) {
+            const query = inputElement.value.trim();
+            if (!query) return;
+
+            // 擷取前幾位數字作為代號 (例如輸入 "2330 台積電" 提取出 "2330")
+            const codeMatch = query.match(/^\d+/);
+            if (!codeMatch) return; // 如果不是數字開頭，當作使用者自訂名稱，不觸發自動查詢
+            
+            const code = codeMatch[0];
+            showStatus(`⏳ 正在聯網查詢台股代號 ${code} 的最新即時資訊...`);
+
+            try {
+                // 利用 cors-anywhere 或公用開放的證交所盤後 API 進行查詢 (使用符合各大瀏覽器無阻擋的 JSONP/Fetch 來源)
+                // 這裡採用臺灣證券交易所官方開放資料 API 機制或公開鏡像
+                const response = await fetch(`https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL`);
+                if (!response.ok) throw new Error("API連線失敗");
+                
+                const data = await response.json();
+                
+                // 比對代號
+                const matchedStock = data.find(item => item.Code === code);
+                
+                if (matchedStock) {
+                    const realName = `${matchedStock.Code} ${matchedStock.Name}`;
+                    const realPrice = parseFloat(matchedStock.ClosingPrice) || 0;
+                    
+                    stocks[index].name = realName;
+                    if (realPrice > 0) {
+                        stocks[index].current = realPrice;
+                    }
+                    
+                    showStatus(`✅ 成功自動帶出：${realName}！最新股價: ${realPrice}`);
+                    renderTable();
+                    updateSelectOptions();
+                    autoSave();
+                } else {
+                    // 如果在上市找不到，嘗試尋找上櫃 (大盤代號通配擴充提示)
+                    showStatus(`⚠️ 證交所資料庫中未找到代號 ${code}，已為您保留手動輸入格式。`);
+                }
+            } catch (error) {
+                console.error("聯網抓取股價失敗:", error);
+                showStatus(`❌ 聯網超時或證交所伺服器忙碌。別擔心，您仍可自由手動填寫股名與股價！`);
             }
         }
 
@@ -297,10 +338,9 @@
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-gray-50 transition text-center';
                 
-                // 🛠️ 修正 1：加上 placeholder 提示，並且數值 input 增加 onclick="this.select()" 達成點擊自動反白全選
                 row.innerHTML = `
                     <td class="p-4 font-medium text-blue-600 text-left">
-                        <input type="text" placeholder="ex: 2330 台積電" value="${stock.name || ''}" onchange="updateStockField(${index}, 'name', this.value)" class="w-full text-left bg-transparent focus:bg-white border-b border-transparent focus:border-gray-300 px-1 py-0.5 rounded focus:outline-none">
+                        <input type="text" placeholder="輸入代號(如2330)按Enter或點旁邊" value="${stock.name || ''}" onblur="checkTaiwanStock(${index}, this)" onkeydown="if(event.key==='Enter') checkTaiwanStock(${index}, this)" onchange="updateStockField(${index}, 'name', this.value)" class="w-full text-left bg-transparent focus:bg-white border-b border-transparent focus:border-gray-300 px-1 py-0.5 rounded focus:outline-none">
                     </td>
                     <td class="p-4">
                         <input type="number" value="${shares}" onclick="this.select()" onchange="updateStockField(${index}, 'shares', this.value)" class="w-20 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none">
@@ -394,15 +434,12 @@
             if (field === 'name') stocks[index].name = value;
             else stocks[index][field] = Number(value) || 0;
             renderTable();
-            updateSelectOptions();
             autoSave();
         }
 
-        // 新增股票預設全為 0 與 空名稱
         function addStockRow() {
             stocks.push({ name: '', shares: 0, cost: 0, current: 0 });
             renderTable();
-            updateSelectOptions();
             autoSave();
         }
 
@@ -412,6 +449,7 @@
                 stocks.splice(index, 1);
                 renderTable();
                 updateSelectOptions();
+                applyFilters();
                 autoSave();
             }
         }
@@ -457,6 +495,34 @@
             renderTable();
             applyFilters();
             autoSave();
+        }
+
+        // 🌟 全自動一鍵同步所有現有股票最新股價
+        async function fetchCurrentPrices() {
+            showStatus("⏳ 正在聯網同步所有庫存標的的最新股價...");
+            try {
+                const response = await fetch(`https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL`);
+                if (!response.ok) throw new Error("API連線失敗");
+                const data = await response.json();
+
+                stocks.forEach(s => {
+                    if (s.name) {
+                        const codeMatch = s.name.match(/^\d+/);
+                        if (codeMatch) {
+                            const matched = data.find(item => item.Code === codeMatch[0]);
+                            if (matched && parseFloat(matched.ClosingPrice) > 0) {
+                                s.current = parseFloat(matched.ClosingPrice);
+                            }
+                        }
+                    }
+                });
+
+                renderTable();
+                showStatus("✅ 全標的真實股價同步成功！");
+                autoSave();
+            } catch (e) {
+                showStatus("❌ 聯網同步失敗（證交所API無回應），已為您維持原數據。");
+            }
         }
 
         function updateSelectOptions() {
@@ -519,20 +585,6 @@
         }
 
         function clearHistory() { if(confirm('確定清空？')) { historyLog = []; applyFilters(); autoSave(); } }
-
-        function fetchCurrentPrices() {
-            showStatus("⏳ 正在更新即時最新股價...");
-            setTimeout(() => {
-                stocks.forEach(s => { 
-                    if (s.current > 0) {
-                        s.current = Number((s.current * (1 + (Math.random() * 0.02 - 0.01))).toFixed(2)); 
-                    }
-                });
-                renderTable();
-                showStatus("✅ 股價同步成功！");
-                autoSave();
-            }, 500);
-        }
 
         function autoSave() {
             localStorage.setItem('accounting_stocks', JSON.stringify(stocks));
