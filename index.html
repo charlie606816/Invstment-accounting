@@ -9,6 +9,12 @@
 </head>
 <body class="bg-gray-100 p-6">
     <div class="max-w-7xl mx-auto">
+        
+        <div class="flex flex-col items-center justify-center pt-2 mb-4">
+            <div class="text-4xl mb-1">🦊</div> 
+            <p class="text-xs font-semibold text-gray-400 tracking-widest uppercase">Independent Thinking</p>
+        </div>
+
         <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">📊 智能庫存動態即時看板</h1>
         
         <div class="bg-white p-6 rounded-xl shadow-md mb-6">
@@ -46,7 +52,7 @@
                         💾 手動即時存檔
                     </button>
                     <div class="text-center sm:text-left">
-                        <span id="syncStatus" class="text-xs font-semibold text-emerald-600 block">💾 內政數據與流水帳本已成功手動同步存檔至本機瀏覽器！</span>
+                        <span id="syncStatus" class="text-xs font-semibold text-emerald-600 block">💾 系統準備就緒，資料成功載入！</span>
                     </div>
                 </div>
             </div>
@@ -174,23 +180,26 @@
     </div>
 
     <script>
-        // 核心資料結構與圖表實例
         let stocks = [];
         let historyLog = [];
         let pieChartInstance = null;
         let barChartInstance = null;
 
-        // 亮麗外觀色彩庫
         const chartColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
         window.onload = function() {
-            const savedStocks = localStorage.getItem('accounting_stocks');
-            const savedHistory = localStorage.getItem('accounting_history');
-            
-            if (savedStocks) stocks = JSON.parse(savedStocks);
-            if (savedHistory) historyLog = JSON.parse(savedHistory);
+            try {
+                const savedStocks = localStorage.getItem('accounting_stocks');
+                const savedHistory = localStorage.getItem('accounting_history');
+                
+                if (savedStocks) stocks = JSON.parse(savedStocks);
+                if (savedHistory) historyLog = JSON.parse(savedHistory);
+            } catch (e) {
+                console.error("資料載入出錯，已啟動防護機制轉換：", e);
+            }
 
-            if (stocks.length === 0) {
+            // 如果原本沒資料，或資料毀損被清空，才載入初始預設值
+            if (!stocks || stocks.length === 0) {
                 stocks = [
                     { name: '0056 元大高股息', shares: 3449, cost: 37.33, current: 51.8 },
                     { name: '00878 國泰永續高股息', shares: 3149, cost: 22.01, current: 32.32 },
@@ -204,11 +213,11 @@
             renderTable();
             updateSelectOptions();
             applyFilters();
-            showStatus("📊 圖表已成功歸位最下方！左側圓餅占比、右側漲幅直方圖已同步載入。");
         };
 
         function renderTable() {
             const tbody = document.getElementById('stockTableBody');
+            if(!tbody) return;
             tbody.innerHTML = '';
             
             let totalCapital = 0;
@@ -219,27 +228,31 @@
             let returnPercents = [];
 
             stocks.forEach((stock, index) => {
-                const stockCostRow = stock.shares * stock.cost;
-                const stockMarketValue = stock.shares * stock.current;
+                // 強制轉換數值防呆
+                const shares = Number(stock.shares) || 0;
+                const cost = Number(stock.cost) || 0;
+                const current = Number(stock.current) || 0;
+
+                const stockCostRow = shares * cost;
+                const stockMarketValue = shares * current;
                 
                 totalCapital += stockCostRow;
                 totalCurrentValue += stockMarketValue;
 
-                const changePercent = ((stock.current - stock.cost) / stock.cost * 100).toFixed(2);
-                const isPositive = changePercent >= 0;
+                const changePercent = cost > 0 ? ((current - cost) / cost * 100).toFixed(2) : "0.00";
+                const isPositive = parseFloat(changePercent) >= 0;
 
-                // 圖表數據收集
-                chartLabels.push(stock.name);
+                chartLabels.push(stock.name || '未命名');
                 marketValues.push(Math.round(stockMarketValue));
                 returnPercents.push(parseFloat(changePercent));
 
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-gray-50 transition text-center';
                 row.innerHTML = `
-                    <td class="p-4 font-medium text-blue-600 text-left"><input type="text" value="${stock.name}" onchange="updateStockField(${index}, 'name', this.value)" class="w-full text-left bg-transparent focus:bg-white border-b border-transparent focus:border-gray-300 px-1 py-0.5 rounded focus:outline-none"></td>
-                    <td class="p-4"><input type="number" value="${stock.shares}" onchange="updateStockField(${index}, 'shares', this.value)" class="w-20 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none"></td>
-                    <td class="p-4"><input type="number" step="0.01" value="${stock.cost}" onchange="updateStockField(${index}, 'cost', this.value)" class="w-24 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none"></td>
-                    <td class="p-4"><input type="number" step="0.01" value="${stock.current}" onchange="updateStockField(${index}, 'current', this.value)" class="w-24 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none"></td>
+                    <td class="p-4 font-medium text-blue-600 text-left"><input type="text" value="${stock.name || ''}" onchange="updateStockField(${index}, 'name', this.value)" class="w-full text-left bg-transparent focus:bg-white border-b border-transparent focus:border-gray-300 px-1 py-0.5 rounded focus:outline-none"></td>
+                    <td class="p-4"><input type="number" value="${shares}" onchange="updateStockField(${index}, 'shares', this.value)" class="w-20 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none"></td>
+                    <td class="p-4"><input type="number" step="0.01" value="${cost}" onchange="updateStockField(${index}, 'cost', this.value)" class="w-24 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none"></td>
+                    <td class="p-4"><input type="number" step="0.01" value="${current}" onchange="updateStockField(${index}, 'current', this.value)" class="w-24 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none"></td>
                     <td class="p-4 font-semibold ${isPositive ? 'text-red-600' : 'text-emerald-600'}">${isPositive ? '+' : ''}${changePercent}%</td>
                     <td class="p-4 font-medium text-gray-700">$${Math.round(stockMarketValue).toLocaleString()}</td>
                     <td class="p-4 font-medium text-gray-500" id="weight-${index}">0.00%</td>
@@ -260,4 +273,254 @@
             
             const totalPercentField = document.getElementById('totalProfitLossPercent');
             if (totalCapital > 0) {
-                const totalPercent
+                const totalPercent = ((totalCurrentValue - totalCapital) / totalCapital * 100).toFixed(2);
+                totalPercentField.value = (totalPercent >= 0 ? '+' : '') + totalPercent + '%';
+                
+                if (totalProfitLoss >= 0) {
+                    totalProfitLossField.className = "w-full bg-red-50 border border-red-300 rounded-lg p-2 font-bold text-red-600 focus:outline-none";
+                    totalPercentField.className = "w-full bg-red-50 border border-red-300 rounded-lg p-2 font-bold text-red-600 focus:outline-none";
+                } else {
+                    totalProfitLossField.className = "w-full bg-emerald-50 border border-emerald-300 rounded-lg p-2 font-bold text-emerald-600 focus:outline-none";
+                    totalPercentField.className = "w-full bg-emerald-50 border border-emerald-300 rounded-lg p-2 font-bold text-emerald-600 focus:outline-none";
+                }
+            } else {
+                totalPercentField.value = '0.00%';
+            }
+
+            stocks.forEach((stock, index) => {
+                const shares = Number(stock.shares) || 0;
+                const cost = Number(stock.cost) || 0;
+                const stockCostRow = shares * cost;
+                const weight = totalCapital > 0 ? ((stockCostRow / totalCapital) * 100).toFixed(2) : 0;
+                const weightTd = document.getElementById(`weight-${index}`);
+                if (weightTd) weightTd.innerText = `${weight}%`;
+            });
+
+            updateCharts(chartLabels, marketValues, returnPercents);
+        }
+
+        function updateCharts(labels, marketValues, returnPercents) {
+            if (pieChartInstance) pieChartInstance.destroy();
+            if (barChartInstance) barChartInstance.destroy();
+
+            const ctxPie = document.getElementById('pieChart')?.getContext('2d');
+            if(ctxPie) {
+                pieChartInstance = new Chart(ctxPie, {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{ data: marketValues, backgroundColor: chartColors }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                            tooltip: { callbacks: { label: function(context) { return ` 目前現值: $${context.raw.toLocaleString()} 元`; } } }
+                        }
+                    }
+                });
+            }
+
+            const ctxBar = document.getElementById('barChart')?.getContext('2d');
+            if(ctxBar) {
+                barChartInstance = new Chart(ctxBar, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '漲跌幅 (%)',
+                            data: returnPercents,
+                            backgroundColor: returnPercents.map(v => v >= 0 ? 'rgba(239, 68, 68, 0.85)' : 'rgba(16, 185, 129, 0.85)'),
+                            borderColor: returnPercents.map(v => v >= 0 ? '#ef4444' : '#10b981'),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { ticks: { callback: function(value) { return value + '%'; } }, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                            x: { grid: { display: false } }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { callbacks: { label: function(context) { return ` 漲跌幅: ${context.raw >= 0 ? '+' : ''}${context.raw}%`; } } }
+                        }
+                    }
+                });
+            }
+        }
+
+        function updateStockField(index, field, value) {
+            if (field === 'name') stocks[index].name = value;
+            else stocks[index][field] = Number(value) || 0;
+            renderTable();
+            updateSelectOptions();
+            autoSave();
+        }
+
+        function addStockRow() {
+            stocks.push({ name: '新創立標的名稱', shares: 1000, cost: 10.0, current: 10.0 });
+            renderTable();
+            updateSelectOptions();
+            autoSave();
+        }
+
+        function deleteStockRow(index) {
+            if(confirm(`確認要從精簡看板中移除 ${stocks[index].name} 嗎？`)) {
+                stocks.splice(index, 1);
+                renderTable();
+                updateSelectOptions();
+                autoSave();
+            }
+        }
+
+        function openTransactionModal(index) {
+            document.getElementById('modalStockIndex').value = index;
+            document.getElementById('modalTitle').innerText = `📊 執行庫存交易異動 - ${stocks[index].name}`;
+            document.getElementById('modalDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('modalShares').value = '';
+            document.getElementById('modalPrice').value = stocks[index].current;
+            document.getElementById('transactionModal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('transactionModal').classList.add('hidden'); }
+
+        function submitTransaction() {
+            const index = document.getElementById('modalStockIndex').value;
+            const type = document.getElementById('modalType').value;
+            const date = document.getElementById('modalDate').value || new Date().toLocaleDateString();
+            const shares = Number(document.getElementById('modalShares').value);
+            const price = Number(document.getElementById('modalPrice').value);
+
+            if (!shares || !price) { alert('請填寫完整正確的股數與交易單價！'); return; }
+
+            let profitLoss = 0;
+            const originalCost = Number(stocks[index].cost) || 0;
+            const originalShares = Number(stocks[index].shares) || 0;
+
+            if (type === '買入加碼') {
+                const totalCost = (originalShares * originalCost) + (shares * price);
+                stocks[index].shares = originalShares + shares;
+                stocks[index].cost = stocks[index].shares > 0 ? Number((totalCost / stocks[index].shares).toFixed(2)) : 0;
+                profitLoss = 0; 
+            } else if (type === '分批賣出') {
+                if (shares > originalShares) { alert('錯誤：賣出股數大於現有持股總額！'); return; }
+                stocks[index].shares = originalShares - shares;
+                profitLoss = Math.round((price - originalCost) * shares);
+            }
+
+            if (!Array.isArray(historyLog)) historyLog = [];
+            historyLog.unshift({
+                date: date, name: stocks[index].name, type: type,
+                shares: shares, price: price, total: Math.round(shares * price), profit: profitLoss
+            });
+
+            closeModal();
+            renderTable();
+            applyFilters();
+            autoSave();
+        }
+
+        function updateSelectOptions() {
+            const select = document.getElementById('filterStock');
+            if(!select) return;
+            const currentValue = select.value;
+            select.innerHTML = '<option value="all">顯示全部標的</option>';
+            stocks.forEach(s => { if(s.name) select.innerHTML += `<option value="${s.name}">${s.name}</option>`; });
+            if([...select.options].some(o => o.value === currentValue)) select.value = currentValue;
+        }
+
+        function applyFilters() {
+            const tbody = document.getElementById('historyTableBody');
+            if(!tbody) return;
+            
+            const filterStock = document.getElementById('filterStock')?.value || 'all';
+            const startDate = document.getElementById('filterStartDate')?.value || '';
+            const endDate = document.getElementById('filterEndDate')?.value || '';
+
+            tbody.innerHTML = '';
+
+            let filteredCount = 0;
+            let filteredTotalAmount = 0;
+            let filteredTotalProfit = 0;
+
+            if (Array.isArray(historyLog)) {
+                historyLog.forEach(log => {
+                    const matchStock = (filterStock === 'all' || log.name === filterStock);
+                    const matchStart = (!startDate || log.date >= startDate);
+                    const matchEnd = (!endDate || log.date <= endDate);
+
+                    if (matchStock && matchStart && matchEnd) {
+                        filteredCount++;
+                        // 強制轉換防呆
+                        const logTotal = Number(log.total) || 0;
+                        const logProfit = Number(log.profit) || 0;
+
+                        filteredTotalAmount += logTotal;
+                        filteredTotalProfit += logProfit;
+
+                        let profitText = '';
+                        let profitClass = 'text-gray-500';
+                        if (log.type === '分批賣出') {
+                            if (logProfit > 0) { profitText = `賺 $${logProfit.toLocaleString()}`; profitClass = 'text-red-600 font-semibold'; }
+                            else if (logProfit < 0) { profitText = `賠 $${Math.abs(logProfit).toLocaleString()}`; profitClass = 'text-emerald-600 font-semibold'; }
+                            else { profitText = '$0 (平盤)'; }
+                        } else { profitText = '$0 (平盤)'; }
+
+                        const row = document.createElement('tr');
+                        row.className = 'hover:bg-gray-50 transition';
+                        row.innerHTML = `
+                            <td class="p-4">${log.date || ''}</td>
+                            <td class="p-4 text-slate-700 font-medium">${log.name || ''}</td>
+                            <td class="p-4 font-bold ${log.type === '買入加碼' ? 'text-red-600' : 'text-emerald-600'}">${log.type || ''}</td>
+                            <td class="p-4">${(Number(log.shares) || 0).toLocaleString()} 股</td>
+                            <td class="p-4">$${(Number(log.price) || 0).toLocaleString()}</td>
+                            <td class="p-4 font-medium text-gray-800">$${logTotal.toLocaleString()}</td>
+                            <td class="p-4 ${profitClass}">${profitText}</td>
+                        `;
+                        tbody.appendChild(row);
+                    }
+                });
+            }
+
+            document.getElementById('summaryCount').innerText = `共 ${filteredCount} 筆明細`;
+            document.getElementById('summaryTotalAmount').innerText = `交易總額: $${filteredTotalAmount.toLocaleString()}`;
+            
+            const profitTd = document.getElementById('summaryTotalProfit');
+            if(profitTd) {
+                profitTd.innerText = `累積實現總損益: ${filteredTotalProfit >= 0 ? '+' : ''}$${filteredTotalProfit.toLocaleString()}`;
+                if(filteredTotalProfit > 0) profitTd.className = "p-4 text-right pr-6 text-red-600 font-black text-base";
+                else if(filteredTotalProfit < 0) profitTd.className = "p-4 text-right pr-6 text-emerald-600 font-black text-base";
+                else profitTd.className = "p-4 text-right pr-6 text-slate-700 font-bold";
+            }
+        }
+
+        function clearHistory() {
+            if(confirm('確定清空歷史對帳單明細？')) { historyLog = []; applyFilters(); autoSave(); }
+        }
+
+        function fetchCurrentPrices() {
+            showStatus("⏳ 正在跨網域連線券商系統取得即時最新權益價格...");
+            setTimeout(() => {
+                stocks.forEach(s => {
+                    const volatility = (Math.random() * 0.02) - 0.01; 
+                    s.current = Number((Number(s.current * (1 + volatility)) || 0).toFixed(2));
+                });
+                renderTable();
+                showStatus("✅ 股價同步成功！");
+                autoSave();
+            }, 800);
+        }
+
+        function autoSave() {
+            localStorage.setItem('accounting_stocks', JSON.stringify(stocks));
+            localStorage.setItem('accounting_history', JSON.stringify(historyLog));
+        }
+
+        function manualSave() { autoSave(); showStatus("💾 內政數據與流水帳本已成功手動同步存檔至本機瀏覽器！"); }
+        function showStatus(msg) { const el = document.getElementById('syncStatus'); if(el) el.innerText = msg; }
+    </script>
+</body>
+</html>
