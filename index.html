@@ -160,11 +160,11 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">異動股數 (股)</label>
-                    <input type="number" id="modalShares" min="1" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="number" id="modalShares" min="1" onclick="this.select()" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">交易單價 (元)</label>
-                    <input type="number" id="modalPrice" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="number" id="modalPrice" step="0.01" min="0" onclick="this.select()" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
             </div>
             <div class="mt-6 flex justify-end gap-3">
@@ -204,14 +204,19 @@
                 if (savedStocks) stocks = JSON.parse(savedStocks);
                 if (savedHistory) historyLog = JSON.parse(savedHistory);
             } catch (e) {
-                console.error("讀取快取失敗，執行安全重置", e);
+                console.error("讀取快取失敗", e);
             }
 
-            // 強力防護校正
             if (!Array.isArray(stocks) || stocks.length === 0) stocks = [...defaultStocks];
             if (!Array.isArray(historyLog)) historyLog = [];
 
-            // 清理歷史帳本中潛在的損益 Nan 損壞欄位
+            sanitizeHistory();
+            renderTable();
+            updateSelectOptions();
+            applyFilters();
+        }
+
+        function sanitizeHistory() {
             historyLog = historyLog.filter(log => log && typeof log === 'object').map(log => {
                 let p = Number(log.profit);
                 return {
@@ -224,21 +229,39 @@
                     profit: isNaN(p) ? 0 : p
                 };
             });
-
-            renderTable();
-            updateSelectOptions();
-            applyFilters();
         }
 
-        // 🚨 終極修復大法：手動點擊能百分之百清除髒資料並還原
+        // 🚨 智慧修復改良版：不再盲目清除你新增好並存檔的資料
         function forceResetStorage() {
-            if (confirm("是否執行本機記憶體深層洗淨？這將會清除您目前瀏覽器卡死的舊快取，並還原您的基礎持股資料！")) {
-                localStorage.clear();
-                stocks = [...defaultStocks];
-                historyLog = [];
+            if (confirm("是否執行網頁深度健檢？系統將保留您辛苦記下的庫存與歷史帳本，只去清洗校正讓網頁卡死出不來的損壞格式錯誤！")) {
+                try {
+                    // 1. 抓出目前快取
+                    const savedStocks = localStorage.getItem('accounting_stocks');
+                    const savedHistory = localStorage.getItem('accounting_history');
+                    
+                    if (savedStocks) stocks = JSON.parse(savedStocks);
+                    if (savedHistory) historyLog = JSON.parse(savedHistory);
+                } catch(e) {}
+
+                // 2. 如果本來就完全空的，才放預設值
+                if (!Array.isArray(stocks) || stocks.length === 0) stocks = [...defaultStocks];
+                if (!Array.isArray(historyLog)) historyLog = [];
+
+                // 3. 執行清洗：把所有可能引發 NaN 卡死畫面的數值全部強制轉為安全數字
+                stocks = stocks.map(s => ({
+                    name: s.name || '',
+                    shares: isNaN(Number(s.shares)) ? 0 : Number(s.shares),
+                    cost: isNaN(Number(s.cost)) ? 0 : Number(s.cost),
+                    current: isNaN(Number(s.current)) ? 0 : Number(s.current)
+                }));
+                sanitizeHistory();
+
+                // 4. 重新存入與渲染
                 autoSave();
-                loadDataFromStorage();
-                showStatus("✅ 本機記憶體已深層洗淨，資料已全面復活重現！");
+                renderTable();
+                updateSelectOptions();
+                applyFilters();
+                showStatus("✅ 網頁格式校正完成！您原本紀錄的股票已成功保留與重現！");
             }
         }
 
@@ -273,11 +296,21 @@
 
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-gray-50 transition text-center';
+                
+                // 🛠️ 修正 1：加上 placeholder 提示，並且數值 input 增加 onclick="this.select()" 達成點擊自動反白全選
                 row.innerHTML = `
-                    <td class="p-4 font-medium text-blue-600 text-left"><input type="text" value="${stock.name || ''}" onchange="updateStockField(${index}, 'name', this.value)" class="w-full text-left bg-transparent focus:bg-white border-b border-transparent focus:border-gray-300 px-1 py-0.5 rounded focus:outline-none"></td>
-                    <td class="p-4"><input type="number" value="${shares}" onchange="updateStockField(${index}, 'shares', this.value)" class="w-20 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none"></td>
-                    <td class="p-4"><input type="number" step="0.01" value="${cost}" onchange="updateStockField(${index}, 'cost', this.value)" class="w-24 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none"></td>
-                    <td class="p-4"><input type="number" step="0.01" value="${current}" onchange="updateStockField(${index}, 'current', this.value)" class="w-24 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none"></td>
+                    <td class="p-4 font-medium text-blue-600 text-left">
+                        <input type="text" placeholder="ex: 2330 台積電" value="${stock.name || ''}" onchange="updateStockField(${index}, 'name', this.value)" class="w-full text-left bg-transparent focus:bg-white border-b border-transparent focus:border-gray-300 px-1 py-0.5 rounded focus:outline-none">
+                    </td>
+                    <td class="p-4">
+                        <input type="number" value="${shares}" onclick="this.select()" onchange="updateStockField(${index}, 'shares', this.value)" class="w-20 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none">
+                    </td>
+                    <td class="p-4">
+                        <input type="number" step="0.01" value="${cost}" onclick="this.select()" onchange="updateStockField(${index}, 'cost', this.value)" class="w-24 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none">
+                    </td>
+                    <td class="p-4">
+                        <input type="number" step="0.01" value="${current}" onclick="this.select()" onchange="updateStockField(${index}, 'current', this.value)" class="w-24 text-center bg-transparent focus:bg-white border border-transparent focus:border-gray-300 rounded focus:outline-none">
+                    </td>
                     <td class="p-4 font-semibold ${isPositive ? 'text-red-600' : 'text-emerald-600'}">${isPositive ? '+' : ''}${changePercent}%</td>
                     <td class="p-4 font-medium text-gray-700">$${Math.round(stockMarketValue).toLocaleString()}</td>
                     <td class="p-4 font-medium text-gray-500" id="weight-${index}">0.00%</td>
@@ -365,15 +398,17 @@
             autoSave();
         }
 
+        // 新增股票預設全為 0 與 空名稱
         function addStockRow() {
-            stocks.push({ name: '新創立標的', shares: 1000, cost: 10, current: 10 });
+            stocks.push({ name: '', shares: 0, cost: 0, current: 0 });
             renderTable();
             updateSelectOptions();
             autoSave();
         }
 
-        rel = function deleteStockRow(index) {
-            if(confirm(`確認要移除 ${stocks[index].name} 嗎？`)) {
+        function deleteStockRow(index) {
+            const displayName = stocks[index].name || '未命名標的';
+            if(confirm(`確認要移除 ${displayName} 嗎？`)) {
                 stocks.splice(index, 1);
                 renderTable();
                 updateSelectOptions();
@@ -382,11 +417,12 @@
         }
 
         function openTransactionModal(index) {
+            const displayName = stocks[index].name || '未命名標的';
             document.getElementById('modalStockIndex').value = index;
-            document.getElementById('modalTitle').innerText = `📊 交易異動 - ${stocks[index].name}`;
+            document.getElementById('modalTitle').innerText = `📊 交易異動 - ${displayName}`;
             document.getElementById('modalDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('modalShares').value = '';
-            document.getElementById('modalPrice').value = stocks[index].current;
+            document.getElementById('modalPrice').value = stocks[index].current || '';
             document.getElementById('transactionModal').classList.remove('hidden');
         }
 
@@ -404,6 +440,7 @@
             let profitLoss = 0;
             const originalCost = Number(stocks[index].cost) || 0;
             const originalShares = Number(stocks[index].shares) || 0;
+            const stockName = stocks[index].name || '未命名標的';
 
             if (type === '買入加碼') {
                 const totalCost = (originalShares * originalCost) + (shares * price);
@@ -415,7 +452,7 @@
                 profitLoss = Math.round((price - originalCost) * shares);
             }
 
-            historyLog.unshift({ date, name: stocks[index].name, type, shares, price, total: Math.round(shares * price), profit: profitLoss });
+            historyLog.unshift({ date, name: stockName, type, shares, price, total: Math.round(shares * price), profit: profitLoss });
             closeModal();
             renderTable();
             applyFilters();
@@ -486,7 +523,11 @@
         function fetchCurrentPrices() {
             showStatus("⏳ 正在更新即時最新股價...");
             setTimeout(() => {
-                stocks.forEach(s => { s.current = Number((s.current * (1 + (Math.random() * 0.02 - 0.01))).toFixed(2)); });
+                stocks.forEach(s => { 
+                    if (s.current > 0) {
+                        s.current = Number((s.current * (1 + (Math.random() * 0.02 - 0.01))).toFixed(2)); 
+                    }
+                });
                 renderTable();
                 showStatus("✅ 股價同步成功！");
                 autoSave();
