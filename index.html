@@ -50,14 +50,14 @@
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-slate-800 text-white text-sm font-medium">
                         <tr>
-                            <th class="p-4 pl-6">代號/名稱</th>
+                            <th class="p-4">代號/名稱</th>
                             <th class="p-4">持股股數</th>
                             <th class="p-4">平均成本 (元)</th>
                             <th class="p-4">當下股價 (元)</th>
                             <th class="p-4">庫存漲跌幅</th>
                             <th class="p-4">目前市值</th>
                             <th class="p-4">本金占比</th>
-                            <th class="p-4 pr-6 text-center">操作</th>
+                            <th class="p-4 text-center">操作</th>
                         </tr>
                     </thead>
                     <tbody id="stockTableBody" class="text-sm divide-y divide-slate-100 font-medium">
@@ -112,16 +112,8 @@
     </div>
 
     <script>
-        // 初始化載入數據或是給予預設假資料範本
-        let stocks = JSON.parse(localStorage.getItem('my_stocks')) || [
-            {name: '0056 元大高股息', shares: 3449, cost: 37.33, current: 51.77},
-            {name: '00878 國泰永續高股息', shares: 3149, cost: 22.01, current: 32.22},
-            {name: '00919 群益台灣精選高息', shares: 3726, cost: 23.17, current: 30.64},
-            {name: '00929 復華台灣科技優息', shares: 3420, cost: 18.97, current: 29.94},
-            {name: '3661 世芯-KY', shares: 20, cost: 3290, current: 4269.57},
-            {name: '4966 譜瑞-KY', shares: 155, cost: 805.56, current: 727.62},
-            {name: '6515 穎威', shares: 10, cost: 8647.5, current: 8389.88}
-        ];
+        // 初始化載入數據：公開分享版，預設不帶入任何庫存資料與歷史紀錄
+        let stocks = JSON.parse(localStorage.getItem('my_stocks')) || [];
         let history = JSON.parse(localStorage.getItem('my_history')) || [];
 
         // 核心渲染畫面邏輯
@@ -130,41 +122,45 @@
             tbody.innerHTML = '';
             let tCap = 0, tVal = 0;
 
-            // 計算本金總額與總市值
-            stocks.forEach(s => {
-                tCap += s.shares * s.cost;
-                tVal += s.shares * s.current;
-            });
+            // 如果完全沒有資料，顯示提示訊息
+            if (stocks.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 bg-slate-50 rounded-b-2xl">目前無庫存資料，請點擊上方「＋ 新增股票」開始建立您的記帳本。</td></tr>`;
+            } else {
+                // 計算本金總額與總市值
+                stocks.forEach(s => {
+                    tCap += s.shares * s.cost;
+                    tVal += s.shares * s.current;
+                });
 
-            stocks.forEach((s, i) => {
-                const row = document.createElement('tr');
-                const mVal = s.shares * s.current;
-                const cVal = s.shares * s.cost;
-                const diffRatio = s.cost > 0 ? ((s.current - s.cost) / s.cost * 100).toFixed(2) : '0.00';
-                const capWeight = tCap > 0 ? ((cVal / tCap) * 100).toFixed(2) + '%' : '0.00%';
-                
-                const isProfit = s.current >= s.cost;
-                const colorClass = isProfit ? 'text-red-600' : 'text-emerald-600';
-                const sign = isProfit ? '+' : '';
+                stocks.forEach((s, i) => {
+                    const row = document.createElement('tr');
+                    const mVal = s.shares * s.current;
+                    const cVal = s.shares * s.cost;
+                    const diffRatio = s.cost > 0 ? ((s.current - s.cost) / s.cost * 100).toFixed(2) : '0.00';
+                    const capWeight = tCap > 0 ? ((cVal / tCap) * 100).toFixed(2) + '%' : '0.00%';
+                    
+                    const isProfit = s.current >= s.cost;
+                    const colorClass = isProfit ? 'text-red-600' : 'text-emerald-600';
+                    const sign = isProfit ? '+' : '';
 
-                // 當下股價(current)欄位加入 readonly 屬性與 bg-gray-100 禁止手動設定
-                row.innerHTML = `
-                    <td class="p-4 pl-6"><input type="text" value="${s.name}" onchange="stocks[${i}].name=this.value; updateFilterOptions()" class="border border-slate-200 p-1.5 rounded-xl w-44 bg-white text-blue-600 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-400"></td>
-                    <td class="p-4"><input type="number" value="${s.shares}" onchange="stocks[${i}].shares=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-400"></td>
-                    <td class="p-4"><input type="number" value="${s.cost}" onchange="stocks[${i}].cost=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-400"></td>
-                    <td class="p-4"><input type="number" value="${s.current}" readonly class="border border-slate-100 p-1.5 rounded-xl w-24 text-slate-600 bg-gray-100 cursor-not-allowed font-semibold focus:outline-none"></td>
-                    <td class="p-4 font-bold ${colorClass}">${sign}${diffRatio}%</td>
-                    <td class="p-4 text-slate-600">$${Math.round(mVal).toLocaleString()}</td>
-                    <td class="p-4 text-slate-500">${capWeight}</td>
-                    <td class="p-4 pr-6 text-center">
-                        <div class="flex justify-center gap-2">
-                            <button onclick="triggerTransaction(${i})" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-2.5 py-1 rounded-lg text-xs font-bold transition">🔄 交易異動</button>
-                            <button onclick="delRow(${i})" class="bg-red-50 text-red-500 hover:bg-red-100 px-2.5 py-1 rounded-lg text-xs font-bold transition">🗑️ 刪除</button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
+                    row.innerHTML = `
+                        <td class="p-4"><input type="text" value="${s.name}" placeholder="例: 2330 台積電" onchange="stocks[${i}].name=this.value; updateFilterOptions()" class="border border-slate-200 p-1.5 rounded-xl w-44 bg-white text-blue-600 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-400"></td>
+                        <td class="p-4"><input type="number" value="${s.shares}" onchange="stocks[${i}].shares=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-400"></td>
+                        <td class="p-4"><input type="number" value="${s.cost}" onchange="stocks[${i}].cost=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-400"></td>
+                        <td class="p-4"><input type="number" value="${s.current}" readonly class="border border-slate-100 p-1.5 rounded-xl w-24 text-slate-600 bg-gray-100 cursor-not-allowed font-semibold focus:outline-none"></td>
+                        <td class="p-4 font-bold ${colorClass}">${sign}${diffRatio}%</td>
+                        <td class="p-4 text-slate-600">$${Math.round(mVal).toLocaleString()}</td>
+                        <td class="p-4 text-slate-500">${capWeight}</td>
+                        <td class="p-4 text-center">
+                            <div class="flex justify-center gap-2">
+                                <button onclick="triggerTransaction(${i})" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-2.5 py-1 rounded-lg text-xs font-bold transition">🔄 交易異動</button>
+                                <button onclick="delRow(${i})" class="bg-red-50 text-red-500 hover:bg-red-100 px-2.5 py-1 rounded-lg text-xs font-bold transition">🗑️ 刪除</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
 
             // 更新頂部數據顯示板
             const profitVal = tVal - tCap;
@@ -186,14 +182,15 @@
 
         // 新增與刪除庫存標的
         function addStockRow() { 
-            stocks.push({name: '新創立標的', shares: 1000, cost: 10, current: 10}); 
+            stocks.push({name: '', shares: 0, cost: 0, current: 0}); 
             render(); 
             updateFilterOptions();
         }
         function delRow(i) { if(confirm('確定要刪除此庫存標的？')) { stocks.splice(i, 1); render(); updateFilterOptions(); } }
 
-        // 模擬交易變動歷史紀錄生成彈窗
+        // 交易變動歷史紀錄生成彈窗
         function triggerTransaction(i) {
+            if(!stocks[i].name) { alert('請先輸入股票代號/名稱再進行交易異動！'); return; }
             const type = prompt("請輸入交易異動類型 (買入 / 賣出):", "買入");
             if(!type || (type !== '買入' && type !== '賣出')) return;
             const num = Number(prompt("請輸入異動股數:", "1000"));
@@ -291,9 +288,7 @@
 
         // 背景非同步默默查詢報價機制 (低頻率不干擾模式)
         async function fetchPriceBackground() {
-            let statusEl = document.getElementById('sysStatus');
             for (let s of stocks) {
-                // 取出純數字部分作為台股代號進行請求
                 const codeMatch = s.name.match(/\d+/);
                 if (codeMatch) {
                     try {
@@ -304,7 +299,7 @@
                             s.current = price;
                         }
                     } catch (e) {
-                        // 遇到跨域或網路限制時，優雅忽略，保留原有緩存價格
+                        // 遇到限制時，優雅忽略，保留原有緩存價格
                     }
                 }
             }
@@ -315,7 +310,7 @@
         updateFilterOptions();
         render();
 
-        // 網頁載入 2 秒後在背景默默更新一次最新的爬蟲時價，不破壞原本的顯示
+        // 網頁載入 2 秒後在背景默默更新一次最新的爬蟲時價
         setTimeout(fetchPriceBackground, 2000);
     </script>
 </body>
