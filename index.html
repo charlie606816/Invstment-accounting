@@ -40,7 +40,7 @@
                     <span>💾</span> 手動即時存檔
                 </button>
                 <span id="sysStatus" class="text-xs text-slate-400 flex items-center gap-1 ml-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 系統準備就緒，資料成功載入！
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 系統準備就緒
                 </span>
             </div>
         </div>
@@ -50,7 +50,7 @@
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-slate-800 text-white text-sm font-medium">
                         <tr>
-                            <th class="p-4">代號/名稱</th>
+                            <th class="p-4 pl-6">代號/名稱</th>
                             <th class="p-4">持股股數</th>
                             <th class="p-4">平均成本 (元)</th>
                             <th class="p-4">當下股價 (元)</th>
@@ -112,7 +112,6 @@
     </div>
 
     <script>
-        // 初始化載入數據：公開分享版，預設不帶入任何庫存資料與歷史紀錄
         let stocks = JSON.parse(localStorage.getItem('my_stocks')) || [];
         let history = JSON.parse(localStorage.getItem('my_history')) || [];
 
@@ -122,11 +121,9 @@
             tbody.innerHTML = '';
             let tCap = 0, tVal = 0;
 
-            // 如果完全沒有資料，顯示提示訊息
             if (stocks.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 bg-slate-50 rounded-b-2xl">目前無庫存資料，請點擊上方「＋ 新增股票」開始建立您的記帳本。</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 bg-slate-50 rounded-b-2xl">目前無庫存資料，請點擊上方「＋ 新增股票」並輸入台股代號開始。</td></tr>`;
             } else {
-                // 計算本金總額與總市值
                 stocks.forEach(s => {
                     tCap += s.shares * s.cost;
                     tVal += s.shares * s.current;
@@ -134,8 +131,8 @@
 
                 stocks.forEach((s, i) => {
                     const row = document.createElement('tr');
-                    const mVal = s.shares * s.current;
-                    const cVal = s.shares * s.cost;
+                    const marketVal = s.shares * s.current;
+                    const costVal = s.shares * s.cost;
                     const diffRatio = s.cost > 0 ? ((s.current - s.cost) / s.cost * 100).toFixed(2) : '0.00';
                     const capWeight = tCap > 0 ? ((cVal / tCap) * 100).toFixed(2) + '%' : '0.00%';
                     
@@ -144,12 +141,16 @@
                     const sign = isProfit ? '+' : '';
 
                     row.innerHTML = `
-                        <td class="p-4"><input type="text" value="${s.name}" placeholder="例: 2330 台積電" onchange="stocks[${i}].name=this.value; updateFilterOptions()" class="border border-slate-200 p-1.5 rounded-xl w-44 bg-white text-blue-600 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-400"></td>
+                        <td class="p-4">
+                            <input type="text" value="${s.name}" placeholder="請輸入代號 (如: 2330)" 
+                                onchange="handleStockCodeChange(${i}, this.value)" 
+                                class="border border-slate-200 p-1.5 rounded-xl w-48 bg-white text-blue-600 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-400">
+                        </td>
                         <td class="p-4"><input type="number" value="${s.shares}" onchange="stocks[${i}].shares=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-400"></td>
                         <td class="p-4"><input type="number" value="${s.cost}" onchange="stocks[${i}].cost=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-400"></td>
                         <td class="p-4"><input type="number" value="${s.current}" readonly class="border border-slate-100 p-1.5 rounded-xl w-24 text-slate-600 bg-gray-100 cursor-not-allowed font-semibold focus:outline-none"></td>
                         <td class="p-4 font-bold ${colorClass}">${sign}${diffRatio}%</td>
-                        <td class="p-4 text-slate-600">$${Math.round(mVal).toLocaleString()}</td>
+                        <td class="p-4 text-slate-600">$${Math.round(marketVal).toLocaleString()}</td>
                         <td class="p-4 text-slate-500">${capWeight}</td>
                         <td class="p-4 text-center">
                             <div class="flex justify-center gap-2">
@@ -162,7 +163,6 @@
                 });
             }
 
-            // 更新頂部數據顯示板
             const profitVal = tVal - tCap;
             const totalPercent = tCap > 0 ? ((profitVal / tCap) * 100).toFixed(2) : '0.00';
             
@@ -180,7 +180,47 @@
             renderHistory();
         }
 
-        // 新增與刪除庫存標的
+        // 核心邏輯：當代號改變時，自動去網路抓取名稱與股價
+        async function handleStockCodeChange(index, value) {
+            const updateStatus = (msg) => document.getElementById('sysStatus').innerText = msg;
+            // 提取出純數字代號
+            const codeMatch = value.match(/\d+/);
+            if (!codeMatch) {
+                alert('請輸入正確的股票純數字代號！');
+                return;
+            }
+            const code = codeMatch[0];
+            updateStatus(`🔍 正在查詢代號 ${code} ...`);
+
+            try {
+                // 向 Yahoo Finance 發出 API 請求
+                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TW?interval=1d&range=1d`);
+                const data = await res.json();
+                
+                // 讀取名稱與最新價格（若為假日，API會回傳前一交易日收盤價）
+                const meta = data.chart.result[0].meta;
+                const price = meta.regularMarketPrice;
+                
+                // 嘗試從 API 取出公司簡稱，若無則用代號替代
+                let shortName = meta.symbol.replace('.TW', '');
+                
+                if (price && price > 0) {
+                    stocks[index].name = `${code} ${shortName}`;
+                    stocks[index].current = price;
+                    updateStatus(`✅ 成功載入: ${code} ${shortName}`);
+                } else {
+                    throw new Error('查無股價');
+                }
+            } catch (e) {
+                updateStatus(`❌ 查詢代號 ${code} 失敗，請確認代號是否正確或網路是否遭阻擋`);
+                alert(`無法自動獲取代號 ${code} 的資料，請確認是否為正確的台股上市公司代號。`);
+                stocks[index].name = code; // 失敗時保留原輸入
+            }
+            
+            render();
+            updateFilterOptions();
+        }
+
         function addStockRow() { 
             stocks.push({name: '', shares: 0, cost: 0, current: 0}); 
             render(); 
@@ -188,9 +228,8 @@
         }
         function delRow(i) { if(confirm('確定要刪除此庫存標的？')) { stocks.splice(i, 1); render(); updateFilterOptions(); } }
 
-        // 交易變動歷史紀錄生成彈窗
         function triggerTransaction(i) {
-            if(!stocks[i].name) { alert('請先輸入股票代號/名稱再進行交易異動！'); return; }
+            if(!stocks[i].name) { alert('請先輸入股票代號並等系統自動確認後，再進行交易異動！'); return; }
             const type = prompt("請輸入交易異動類型 (買入 / 賣出):", "買入");
             if(!type || (type !== '買入' && type !== '賣出')) return;
             const num = Number(prompt("請輸入異動股數:", "1000"));
@@ -206,7 +245,6 @@
                 realProfit = (price - stocks[i].cost) * num;
                 stocks[i].shares -= num;
             } else {
-                // 買入加權攤平平均成本
                 const totalCost = (stocks[i].shares * stocks[i].cost) + totalAmount;
                 stocks[i].shares += num;
                 stocks[i].cost = Number((totalCost / stocks[i].shares).toFixed(2));
@@ -222,7 +260,6 @@
                 profit: realProfit
             });
 
-            // 移除已無股份的庫存
             if(stocks[i].shares <= 0) stocks.splice(i, 1);
 
             render();
@@ -230,7 +267,6 @@
             localStorage.setItem('my_history', JSON.stringify(history));
         }
 
-        // 下方交易紀錄渲染與過濾邏輯
         function renderHistory() {
             const fName = document.getElementById('filterName').value;
             const fStart = document.getElementById('filterStart').value;
@@ -272,7 +308,6 @@
             const savedValue = select.value;
             select.innerHTML = '<option value="all">顯示全部標的</option>';
             
-            // 取出目前不重複的股票名稱
             const uniqueNames = [...new Set(stocks.map(s => s.name).concat(history.map(h => h.name)))];
             uniqueNames.forEach(name => {
                 if(!name) return;
@@ -286,7 +321,7 @@
         function clearHistory() { if(confirm('⚠️ 確定要徹底刪除所有交易歷史歷史流水帳本？')) { history = []; localStorage.setItem('my_history', JSON.stringify(history)); renderHistory(); } }
         function saveData() { localStorage.setItem('my_stocks', JSON.stringify(stocks)); localStorage.setItem('my_history', JSON.stringify(history)); alert('💾 本地數據與流水帳本已成功手動同步存檔至本機瀏覽器！'); }
 
-        // 背景非同步默默查詢報價機制 (低頻率不干擾模式)
+        // 背景靜態更新機制：開啟網頁時默默把現有庫存的價格刷新一次
         async function fetchPriceBackground() {
             for (let s of stocks) {
                 const codeMatch = s.name.match(/\d+/);
@@ -295,23 +330,17 @@
                         const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${codeMatch[0]}.TW?interval=1d&range=1d`);
                         const data = await res.json();
                         const price = data.chart.result[0].meta.regularMarketPrice;
-                        if (price && price > 0) {
-                            s.current = price;
-                        }
-                    } catch (e) {
-                        // 遇到限制時，優雅忽略，保留原有緩存價格
-                    }
+                        if (price && price > 0) s.current = price;
+                    } catch (e) {}
                 }
             }
             render();
         }
 
-        // 初始化驅動頁面
         updateFilterOptions();
         render();
-
-        // 網頁載入 2 秒後在背景默默更新一次最新的爬蟲時價
-        setTimeout(fetchPriceBackground, 2000);
+        // 進入網頁 1.5 秒後背景靜態刷新一次
+        setTimeout(fetchPriceBackground, 1500);
     </script>
 </body>
 </html>
