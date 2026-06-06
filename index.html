@@ -134,7 +134,7 @@
                     const marketVal = s.shares * s.current;
                     const costVal = s.shares * s.cost;
                     const diffRatio = s.cost > 0 ? ((s.current - s.cost) / s.cost * 100).toFixed(2) : '0.00';
-                    const capWeight = tCap > 0 ? ((cVal / tCap) * 100).toFixed(2) + '%' : '0.00%';
+                    const capWeight = tCap > 0 ? ((costVal / tCap) * 100).toFixed(2) + '%' : '0.00%';
                     
                     const isProfit = s.current >= s.cost;
                     const colorClass = isProfit ? 'text-red-600' : 'text-emerald-600';
@@ -180,41 +180,40 @@
             renderHistory();
         }
 
-        // 核心邏輯：當代號改變時，自動去網路抓取名稱與股價
+        // 核心邏輯修正：使用 allorigins 免費代理規避 GitHub Pages 的 CORS 跨境限制
         async function handleStockCodeChange(index, value) {
             const updateStatus = (msg) => document.getElementById('sysStatus').innerText = msg;
-            // 提取出純數字代號
             const codeMatch = value.match(/\d+/);
             if (!codeMatch) {
                 alert('請輸入正確的股票純數字代號！');
                 return;
             }
             const code = codeMatch[0];
-            updateStatus(`🔍 正在查詢代號 ${code} ...`);
+            updateStatus(`🔍 正在跨境查詢代號 ${code} ...`);
 
             try {
-                // 向 Yahoo Finance 發出 API 請求
-                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TW?interval=1d&range=1d`);
-                const data = await res.json();
+                // 透過 allorigins 轉接 Yahoo Finance API
+                const targetUrl = encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TW?interval=1d&range=1d`);
+                const res = await fetch(`https://api.allorigins.win/get?url=${targetUrl}`);
+                const proxyData = await res.json();
+                const data = JSON.parse(proxyData.contents);
                 
-                // 讀取名稱與最新價格（若為假日，API會回傳前一交易日收盤價）
                 const meta = data.chart.result[0].meta;
                 const price = meta.regularMarketPrice;
-                
-                // 嘗試從 API 取出公司簡稱，若無則用代號替代
-                let shortName = meta.symbol.replace('.TW', '');
+                let displayName = meta.symbol.replace('.TW', '');
                 
                 if (price && price > 0) {
-                    stocks[index].name = `${code} ${shortName}`;
+                    stocks[index].name = `${code} ${displayName}`;
                     stocks[index].current = price;
-                    updateStatus(`✅ 成功載入: ${code} ${shortName}`);
+                    updateStatus(`✅ 成功載入: ${code} ${displayName}`);
+                    localStorage.setItem('my_stocks', JSON.stringify(stocks));
                 } else {
-                    throw new Error('查無股價');
+                    throw new Error('數據異常');
                 }
             } catch (e) {
-                updateStatus(`❌ 查詢代號 ${code} 失敗，請確認代號是否正確或網路是否遭阻擋`);
-                alert(`無法自動獲取代號 ${code} 的資料，請確認是否為正確的台股上市公司代號。`);
-                stocks[index].name = code; // 失敗時保留原輸入
+                updateStatus(`❌ 查詢代號 ${code} 失敗`);
+                alert(`無法自動獲取代號 ${code} 的資料。\n提示：請確認是否為正確的台灣上市櫃股票或 ETF 代號（如 2330、0056）。`);
+                stocks[index].name = value; 
             }
             
             render();
@@ -226,7 +225,7 @@
             render(); 
             updateFilterOptions();
         }
-        function delRow(i) { if(confirm('確定要刪除此庫存標的？')) { stocks.splice(i, 1); render(); updateFilterOptions(); } }
+        function delRow(i) { if(confirm('確定要刪除此庫存標的？')) { stocks.splice(i, 1); render(); updateFilterOptions(); localStorage.setItem('my_stocks', JSON.stringify(stocks)); } }
 
         function triggerTransaction(i) {
             if(!stocks[i].name) { alert('請先輸入股票代號並等系統自動確認後，再進行交易異動！'); return; }
@@ -321,14 +320,16 @@
         function clearHistory() { if(confirm('⚠️ 確定要徹底刪除所有交易歷史歷史流水帳本？')) { history = []; localStorage.setItem('my_history', JSON.stringify(history)); renderHistory(); } }
         function saveData() { localStorage.setItem('my_stocks', JSON.stringify(stocks)); localStorage.setItem('my_history', JSON.stringify(history)); alert('💾 本地數據與流水帳本已成功手動同步存檔至本機瀏覽器！'); }
 
-        // 背景靜態更新機制：開啟網頁時默默把現有庫存的價格刷新一次
+        // 背景靜態更新機制：開啟網頁時透過 Proxy 默默把現有庫存的價格刷新一次
         async function fetchPriceBackground() {
             for (let s of stocks) {
                 const codeMatch = s.name.match(/\d+/);
                 if (codeMatch) {
                     try {
-                        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${codeMatch[0]}.TW?interval=1d&range=1d`);
-                        const data = await res.json();
+                        const targetUrl = encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${codeMatch[0]}.TW?interval=1d&range=1d`);
+                        const res = await fetch(`https://api.allorigins.win/get?url=${targetUrl}`);
+                        const proxyData = await res.json();
+                        const data = JSON.parse(proxyData.contents);
                         const price = data.chart.result[0].meta.regularMarketPrice;
                         if (price && price > 0) s.current = price;
                     } catch (e) {}
@@ -339,7 +340,7 @@
 
         updateFilterOptions();
         render();
-        // 進入網頁 1.5 秒後背景靜態刷新一次
+        // 進入網頁 1.5 秒後背景自動更新一次
         setTimeout(fetchPriceBackground, 1500);
     </script>
 </body>
