@@ -227,17 +227,20 @@
                 }
             });
 
+            // 先更新舊有項目
             stocks.forEach(s => {
-                if (stockMap[s.name]) {
+                if (s.name && stockMap[s.name]) {
                     s.shares = stockMap[s.name].shares;
                     s.cost = stockMap[s.name].currentCost;
-                } else {
+                } else if (s.name) {
+                    // 如果有名字但歷史已被刪空，重設為0
                     s.shares = 0;
                     s.cost = 0;
                 }
             });
 
-            stocks = stocks.filter(s => s.name === '' || s.shares > 0);
+            // 關鍵安全防護：不要直接把無歷史但有名字（正在編輯中）的新項目過濾掉
+            stocks = stocks.filter(s => s.name === '' || s.shares > 0 || (s.shares === 0 && s.cost === 0 && !history.some(h => h.name === s.name)));
 
             localStorage.setItem('my_stocks', JSON.stringify(stocks));
             localStorage.setItem('my_history', JSON.stringify(history));
@@ -328,8 +331,8 @@
                         tradeRow.className = "bg-slate-100/70 border-l-4 border-blue-600 transition-all duration-200";
                         tradeRow.innerHTML = `
                             <td colspan="8" class="p-4 pl-8">
-                                <div class="flex flex-wrap items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-md max-w-5xl">
-                                    <div class="text-xs font-black text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">帳目異動面板 ➔ ${s.name||'未命名'}</div>
+                                <div class="flex flex-wrap items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-md max-w-5xl" onclick="event.stopPropagation()">
+                                    <div class="text-xs font-black text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">帳目異動面板 ➔ <span id="panelLabel_${i}">${s.name||'未命名'}</span></div>
                                     
                                     <div class="flex items-center gap-1.5">
                                         <span class="text-xs font-bold text-slate-500">交易日期:</span>
@@ -392,6 +395,7 @@
             const num = Number(document.getElementById(`inlineShares_${i}`).value);
             const price = Number(document.getElementById(`inlinePrice_${i}`).value);
             
+            if (!stocks[i].name) { updateStatus("❌ 提交失敗：股票代號尚未輸入或未載入成功！", true); return; }
             if (!tradeDate) { updateStatus("❌ 提交失敗：請選擇正確的交易日期！", true); return; }
             if (!num || num <= 0 || !price || price <= 0) { updateStatus("❌ 提交失敗：股數與單價必須大於 0！", true); return; }
 
@@ -424,6 +428,7 @@
             const startStr = document.getElementById('filterStart').value;
             const endStr = document.getElementById('filterEnd').value;
             const hbody = document.getElementById('historyTableBody');
+            if(!hbody) return;
             hbody.innerHTML = '';
 
             let filtered = history.filter(h => {
@@ -456,8 +461,10 @@
             });
 
             const profitBox = document.getElementById('filteredProfitTotal');
-            profitBox.innerText = (totalFilteredProfit >= 0 ? '+$' : '-$') + Math.abs(Math.round(totalFilteredProfit)).toLocaleString();
-            profitBox.className = `text-lg font-bold font-mono ${totalFilteredProfit >= 0 ? 'text-red-400' : 'text-emerald-400'}`;
+            if(profitBox) {
+                profitBox.innerText = (totalFilteredProfit >= 0 ? '+$' : '-$') + Math.abs(Math.round(totalFilteredProfit)).toLocaleString();
+                profitBox.className = `text-lg font-bold font-mono ${totalFilteredProfit >= 0 ? 'text-red-400' : 'text-emerald-400'}`;
+            }
 
             if(filtered.length === 0) {
                 hbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400 bg-slate-50/50">沒有符合當前篩選條件的歷史明細項目</td></tr>`;
@@ -586,25 +593,46 @@
             updateStatus(`🔍 正在連線查詢台灣官方數據庫 ${code} ...`);
 
             const result = await fetchRealTWPrice(code);
+            let finalName = "";
+            let finalPrice = 100;
+
             if(result) {
-                stocks[index].name = `${code} ${result.name}`;
-                stocks[index].current = result.price;
+                finalName = `${code} ${result.name}`;
+                finalPrice = result.price;
                 updateStatus(`✅ 數據載入成功: ${code} ${result.name} ($${result.price})`);
             } else {
                 let fallbackName = stockDatabase[code] || "台灣個股";
-                stocks[index].name = `${code} ${fallbackName}`;
-                if(stocks[index].current === 0) stocks[index].current = 100;
+                finalName = `${code} ${fallbackName}`;
+                if(stocks[index] && stocks[index].current > 0) finalPrice = stocks[index].current;
                 updateStatus(`⚠️ 官方數據未完全同步，已加載預設緩存代稱`);
             }
 
-            recalculateStocksFromHistory();
-            render();
+            // 更新記憶體狀態
+            stocks[index].name = finalName;
+            stocks[index].current = finalPrice;
+
+            // 核心修復點：直接就地更新畫面上的欄位文字與連動內嵌面板的文字，先不執行重算與全面重繪
+            const inputs = document.querySelectorAll('#stockTableBody input[type="text"]');
+            if(inputs[index]) {
+                inputs[index].value = finalName;
+            }
+            const labelEl = document.getElementById(`panelLabel_${index}`);
+            if(labelEl) {
+                labelEl.innerText = finalName;
+            }
+            const priceInput = document.getElementById(`inlinePrice_${index}`);
+            if(priceInput) {
+                priceInput.value = finalPrice;
+            }
+
+            // 同步更新篩選清單
             updateFilterOptions();
         }
 
         async function refreshAllPrices() {
             updateStatus(`🔄 開始強制批量同步所有官方市場最新股價...`);
             for(let i=0; i<stocks.length; i++) {
+                if(!stocks[i].name) continue;
                 const codeMatch = stocks[i].name.match(/\d+/);
                 if(codeMatch) {
                     const result = await fetchRealTWPrice(codeMatch[0]);
@@ -620,7 +648,6 @@
             stocks.push({name: '', shares: 0, cost: 0, current: 0}); 
             activeTradeIndex = stocks.length - 1; 
             render(); 
-            updateFilterOptions(); 
         }
         
         function delRow(i) { 
@@ -643,8 +670,12 @@
             if(!select) return;
             const currentSelected = select.value;
             select.innerHTML = '<option value="all">顯示全部標的</option>';
-            const uniqueNames = [...new Set(stocks.map(s => s.name).concat(history.map(h => h.name)))];
-            uniqueNames.forEach(n => { if(n) select.innerHTML += `<option value="${n}">${n}</option>`; });
+            
+            // 抓取所有有名字的庫存與歷史
+            let names = stocks.map(s => s.name).concat(history.map(h => h.name));
+            const uniqueNames = [...new Set(names)].filter(Boolean);
+            
+            uniqueNames.forEach(n => { select.innerHTML += `<option value="${n}">${n}</option>`; });
             if(uniqueNames.includes(currentSelected)) select.value = currentSelected;
         }
 
