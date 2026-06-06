@@ -14,8 +14,8 @@
 <body class="bg-slate-50 min-h-screen p-6 text-slate-800 antialiased">
     <div class="max-w-6xl mx-auto">
         <div class="flex items-center justify-center gap-3 mb-8">
-            <div class="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-xl font-bold">🦊</div>
-            <h1 class="text-2xl font-black text-slate-800 tracking-wide">智能庫存動態即時看板 <span class="text-sm font-semibold bg-slate-900 text-slate-200 px-2 py-0.5 rounded-md ml-1">測試中</span></h1>
+            <div class="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-xl font-bold">📊</div>
+            <h1 class="text-2xl font-black text-slate-800 tracking-wide">智能庫存動態即時看板 <span class="text-sm font-semibold bg-slate-900 text-slate-200 px-2 py-0.5 rounded-md ml-1">官方數據終極版</span></h1>
         </div>
         
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60 mb-6">
@@ -199,8 +199,12 @@
             if(changed) localStorage.setItem('my_history', JSON.stringify(history));
         }
 
+        // 全新核心連動：從歷史紀錄中逆向精算並更新現有庫存數據
         function recalculateStocksFromHistory() {
+            // 建立歷史紀錄的副本，並依時間從舊到新排序，以便依序計算持股成本與損益
             let sortedHistory = [...history].reverse();
+            
+            // 用來暫存每檔股票的當前庫存狀態
             let stockMap = {};
 
             sortedHistory.forEach(h => {
@@ -215,7 +219,9 @@
                     current.shares += h.shares;
                     current.currentCost = current.shares > 0 ? Number((current.totalCost / current.shares).toFixed(2)) : 0;
                 } else if (h.type === '賣出') {
+                    // 修正該筆歷史明細在編輯/刪除後的即時實現損益
                     h.profit = (h.price - current.currentCost) * h.shares;
+                    
                     current.shares -= h.shares;
                     if (current.shares <= 0) {
                         current.shares = 0;
@@ -227,16 +233,19 @@
                 }
             });
 
+            // 回寫到目前的主活體庫存陣列
             stocks.forEach(s => {
                 if (stockMap[s.name]) {
                     s.shares = stockMap[s.name].shares;
                     s.cost = stockMap[s.name].currentCost;
                 } else {
+                    // 若無歷史紀錄，則重設為0
                     s.shares = 0;
                     s.cost = 0;
                 }
             });
 
+            // 剔除因為歷史紀錄更動後庫存歸零的股票（排除剛新增尚未填寫代號的欄位）
             stocks = stocks.filter(s => s.name === '' || s.shares > 0);
 
             localStorage.setItem('my_stocks', JSON.stringify(stocks));
@@ -409,11 +418,14 @@
                 shares: num, 
                 price: price, 
                 total: num * price, 
-                profit: 0 
+                profit: 0 // 統一交給重算函數精準給出
             });
 
             activeTradeIndex = null; 
+            
+            // 全自動連動重算
             recalculateStocksFromHistory();
+            
             updateStatus(`✅ 交易紀錄成功提交！庫存已同步重算。`);
             render();
             updateFilterOptions();
@@ -528,6 +540,7 @@
                 history[targetIdx].price = newPrice;
                 history[targetIdx].total = newShares * newPrice;
                 
+                // 執行核心連動重算
                 recalculateStocksFromHistory();
                 updateStatus("✅ 歷史紀錄已成功更新，上方持股與成本已完全同步重算！");
             }
@@ -538,7 +551,10 @@
 
         function deleteHistoryRow(id) {
             history = history.filter(h => h.id !== id);
+            
+            // 執行核心連動重算
             recalculateStocksFromHistory();
+            
             updateStatus("🗑️ 歷史項目已移出，上方活體庫存與平均成本已全自動對齊！");
             render();
             updateFilterOptions();
@@ -597,6 +613,7 @@
                 updateStatus(`⚠️ 官方數據未完全同步，已加載預設緩存代稱`);
             }
 
+            // 修改名稱後，同步修正該股在歷史紀錄中的名稱
             recalculateStocksFromHistory();
             render();
             updateFilterOptions();
@@ -628,6 +645,7 @@
             stocks.splice(i, 1); 
             activeTradeIndex = null; 
             
+            // 如果連個股欄位都刪除了，同步把該股票的歷史清空
             if (targetName) {
                 history = history.filter(h => h.name !== targetName);
             }
@@ -664,6 +682,7 @@
             updateStatus('💾 數據已安全同步儲存至本地瀏覽器！'); 
         }
 
+        // 初始化第一次載入時，先依據歷史紀錄校正一次庫存，確保完全對齊
         recalculateStocksFromHistory();
         updateFilterOptions();
         render();
