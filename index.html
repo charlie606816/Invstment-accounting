@@ -2,14 +2,14 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>智能庫存動態即時看板 (官方數據終極版)</title>
+    <title>智能庫存動態即時看板 (測試中)</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 p-6">
     <div class="max-w-6xl mx-auto text-slate-800">
-        <div class="flex flex-col items-center mb-6">
-            <div class="w-12 h-12 flex items-center justify-center bg-white rounded-full shadow-md text-2xl mb-2">📊</div>
-            <h1 class="text-2xl font-bold text-slate-800">智能庫存動態即時看板 (官方數據終極版)</h1>
+        <div class="flex items-center justify-center gap-3 mb-6">
+            <span class="text-3xl filter drop-shadow-sm">🦊</span>
+            <h1 class="text-2xl font-bold text-slate-800 tracking-wide">智能庫存動態即時看板 (測試中)</h1>
         </div>
         
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
@@ -118,7 +118,6 @@
         let stocks = JSON.parse(localStorage.getItem('my_stocks')) || [];
         let history = JSON.parse(localStorage.getItem('my_history')) || [];
 
-        // 本地核心常用對照庫
         const stockDatabase = {
             "2330": "台積電", "0056": "元大高股息", "00878": "國泰永續高股息", "00919": "群益台灣精選高息", 
             "00929": "復華台灣科技優息", "3661": "世芯-KY", "4966": "譜瑞-KY", "6515": "穎崴",
@@ -187,13 +186,10 @@
             renderHistory();
         }
 
-        // 串接台灣證交所官方高相容性開放節點 (100% 擬真真實數據)
         async function fetchRealTWPrice(code) {
-            // 自動過濾字串，確保只留純數字
             const cleanCode = code.replace(/\D/g, '');
             if(!cleanCode) return null;
 
-            // 雙軌判定：上市(.TW)與上櫃(.TWO)平行查詢，採用全開放式高擬真代理節點
             const endpoints = [
                 `https://query1.finance.yahoo.com/v8/finance/chart/${cleanCode}.TW?interval=1d&range=1d`,
                 `https://query1.finance.yahoo.com/v8/finance/chart/${cleanCode}.TWO?interval=1d&range=1d`
@@ -201,7 +197,6 @@
 
             for(let url of endpoints) {
                 try {
-                    // 透過全球無阻擋開源 CORS 節點傳遞，防止 Github Pages 網域阻擋
                     const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
                     if(res.ok) {
                         const wrapper = await res.json();
@@ -235,11 +230,10 @@
                 stocks[index].current = result.price;
                 updateStatus(`✅ 官方數據載入成功: ${code} ${result.name} ($${result.price})`);
             } else {
-                // 如果是新股或斷線，沿用舊名或內建庫
                 let fallbackName = stockDatabase[code] || "台灣個股";
                 stocks[index].name = `${code} ${fallbackName}`;
-                if(stocks[index].current === 0 || stocks[index].current === 1000) {
-                    stocks[index].current = code === "2330" ? 950 : 100; // 給予符合時空之基礎市價預估
+                if(stocks[index].current === 0) {
+                    stocks[index].current = 100;
                 }
                 updateStatus(`⚠️ 官方防阻擋防線啟動，已成功載入項目`);
             }
@@ -330,7 +324,6 @@
 
         updateFilterOptions();
         render();
-        // 網頁開啟一秒後自動嘗試背景同步股價
         setTimeout(refreshAllPrices, 1500);
     </script>
 </body>
