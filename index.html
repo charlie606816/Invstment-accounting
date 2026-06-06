@@ -199,6 +199,59 @@
             if(changed) localStorage.setItem('my_history', JSON.stringify(history));
         }
 
+        // 全新核心連動：從歷史紀錄中逆向精算並更新現有庫存數據
+        function recalculateStocksFromHistory() {
+            // 建立歷史紀錄的副本，並依時間從舊到新排序，以便依序計算持股成本與損益
+            let sortedHistory = [...history].reverse();
+            
+            // 用來暫存每檔股票的當前庫存狀態
+            let stockMap = {};
+
+            sortedHistory.forEach(h => {
+                if (!stockMap[h.name]) {
+                    stockMap[h.name] = { shares: 0, totalCost: 0, currentCost: 0 };
+                }
+                
+                let current = stockMap[h.name];
+                
+                if (h.type === '買入') {
+                    current.totalCost += (h.shares * h.price);
+                    current.shares += h.shares;
+                    current.currentCost = current.shares > 0 ? Number((current.totalCost / current.shares).toFixed(2)) : 0;
+                } else if (h.type === '賣出') {
+                    // 修正該筆歷史明細在編輯/刪除後的即時實現損益
+                    h.profit = (h.price - current.currentCost) * h.shares;
+                    
+                    current.shares -= h.shares;
+                    if (current.shares <= 0) {
+                        current.shares = 0;
+                        current.totalCost = 0;
+                        current.currentCost = 0;
+                    } else {
+                        current.totalCost = current.shares * current.currentCost;
+                    }
+                }
+            });
+
+            // 回寫到目前的主活體庫存陣列
+            stocks.forEach(s => {
+                if (stockMap[s.name]) {
+                    s.shares = stockMap[s.name].shares;
+                    s.cost = stockMap[s.name].currentCost;
+                } else {
+                    // 若無歷史紀錄，則重設為0
+                    s.shares = 0;
+                    s.cost = 0;
+                }
+            });
+
+            // 剔除因為歷史紀錄更動後庫存歸零的股票（排除剛新增尚未填寫代號的欄位）
+            stocks = stocks.filter(s => s.name === '' || s.shares > 0);
+
+            localStorage.setItem('my_stocks', JSON.stringify(stocks));
+            localStorage.setItem('my_history', JSON.stringify(history));
+        }
+
         function render() {
             ensureHistoryIds();
             const tbody = document.getElementById('stockTableBody');
@@ -351,18 +404,9 @@
             if (!tradeDate) { updateStatus("❌ 提交失敗：請選擇正確的交易日期！", true); return; }
             if (!num || num <= 0 || !price || price <= 0) { updateStatus("❌ 提交失敗：股數與單價必須大於 0！", true); return; }
 
-            let realProfit = 0;
-            if (type === '賣出') {
-                if (num > Number(stocks[i].shares)) {
-                    updateStatus(`❌ 錯誤：賣出股數 (${num}) 大於現有庫存 (${stocks[i].shares})！`, true);
-                    return;
-                }
-                realProfit = (price - Number(stocks[i].cost)) * num;
-                stocks[i].shares = Number(stocks[i].shares) - num;
-            } else {
-                const totalCost = (Number(stocks[i].shares) * Number(stocks[i].cost)) + (num * price);
-                stocks[i].shares = Number(stocks[i].shares) + num;
-                stocks[i].cost = Number((totalCost / stocks[i].shares).toFixed(2));
+            if (type === '賣出' && num > Number(stocks[i].shares)) {
+                updateStatus(`❌ 錯誤：賣出股數 (${num}) 大於現有庫存 (${stocks[i].shares})！`, true);
+                return;
             }
 
             const uniqueId = 'h_' + Math.random().toString(36).substr(2, 9) + Date.now();
@@ -374,14 +418,13 @@
                 shares: num, 
                 price: price, 
                 total: num * price, 
-                profit: realProfit 
+                profit: 0 // 統一交給重算函數精準給出
             });
 
-            if (stocks[i].shares <= 0) stocks.splice(i, 1);
-
             activeTradeIndex = null; 
-            localStorage.setItem('my_stocks', JSON.stringify(stocks));
-            localStorage.setItem('my_history', JSON.stringify(history));
+            
+            // 全自動連動重算
+            recalculateStocksFromHistory();
             
             updateStatus(`✅ 交易紀錄成功提交！庫存已同步重算。`);
             render();
@@ -445,8 +488,8 @@
                         <td class="p-2"><span class="px-2 py-0.5 rounded text-xs bg-slate-100 font-bold">${h.type}</span></td>
                         <td class="p-2"><input type="number" id="editShares_${h.id}" value="${h.shares}" class="border border-slate-300 rounded p-1 text-xs w-20 text-center font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"></td>
                         <td class="p-2"><input type="number" id="editPrice_${h.id}" value="${h.price}" step="0.01" class="border border-slate-300 rounded p-1 text-xs w-20 text-center font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"></td>
-                        <td class="p-2 text-xs text-slate-400">系統自動重算</td>
-                        <td class="p-2 text-xs text-slate-400">系統自動重算</td>
+                        <td class="p-2 text-xs text-slate-400">系統全自動重算</td>
+                        <td class="p-2 text-xs text-slate-400">系統全自動重算</td>
                         <td class="p-2 text-center">
                             <div class="flex justify-center gap-1.5">
                                 <button onclick="saveHistoryRow('${h.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded text-xs font-bold shadow-sm">💾 儲存</button>
@@ -492,21 +535,14 @@
 
             const targetIdx = history.findIndex(h => h.id === id);
             if (targetIdx !== -1) {
-                let item = history[targetIdx];
-                item.date = newDate;
-                item.shares = newShares;
-                item.price = newPrice;
-                item.total = newShares * newPrice;
+                history[targetIdx].date = newDate;
+                history[targetIdx].shares = newShares;
+                history[targetIdx].price = newPrice;
+                history[targetIdx].total = newShares * newPrice;
                 
-                if (item.type === '賣出') {
-                    const matchStock = stocks.find(s => s.name === item.name);
-                    const baseCost = matchStock ? Number(matchStock.cost) : newPrice; 
-                    item.profit = (newPrice - baseCost) * newShares;
-                }
-                
-                history[targetIdx] = item;
-                localStorage.setItem('my_history', JSON.stringify(history));
-                updateStatus("✅ 歷史紀錄已成功更新重算！");
+                // 執行核心連動重算
+                recalculateStocksFromHistory();
+                updateStatus("✅ 歷史紀錄已成功更新，上方持股與成本已完全同步重算！");
             }
 
             editingHistoryId = null;
@@ -515,8 +551,11 @@
 
         function deleteHistoryRow(id) {
             history = history.filter(h => h.id !== id);
-            localStorage.setItem('my_history', JSON.stringify(history));
-            updateStatus("🗑️ 歷史交易項目已移出對帳單");
+            
+            // 執行核心連動重算
+            recalculateStocksFromHistory();
+            
+            updateStatus("🗑️ 歷史項目已移出，上方活體庫存與平均成本已全自動對齊！");
             render();
             updateFilterOptions();
         }
@@ -554,7 +593,6 @@
             if (!codeMatch) return;
             const code = codeMatch[0];
             
-            // 防呆：檢查是否已有相同代號的股票
             const isDuplicate = stocks.some((s, idx) => idx !== index && s.name.includes(code));
             if (isDuplicate) {
                 updateStatus(`⚠️ 提示：庫存中已有代號 ${code} 的標的，請直接在該列點擊「交易」異動活體帳目即可。`, true);
@@ -575,7 +613,8 @@
                 updateStatus(`⚠️ 官方數據未完全同步，已加載預設緩存代稱`);
             }
 
-            localStorage.setItem('my_stocks', JSON.stringify(stocks));
+            // 修改名稱後，同步修正該股在歷史紀錄中的名稱
+            recalculateStocksFromHistory();
             render();
             updateFilterOptions();
         }
@@ -596,18 +635,25 @@
 
         function addStockRow() { 
             stocks.push({name: '', shares: 0, cost: 0, current: 0}); 
-            activeTradeIndex = stocks.length - 1; // 自動幫使用者點開交易異動面板
+            activeTradeIndex = stocks.length - 1; 
             render(); 
             updateFilterOptions(); 
         }
         
         function delRow(i) { 
+            let targetName = stocks[i].name;
             stocks.splice(i, 1); 
             activeTradeIndex = null; 
-            updateStatus("🗑️ 庫存個股已成功移出看板");
+            
+            // 如果連個股欄位都刪除了，同步把該股票的歷史清空
+            if (targetName) {
+                history = history.filter(h => h.name !== targetName);
+            }
+            
+            recalculateStocksFromHistory();
+            updateStatus("🗑️ 庫存個股與關聯歷史已成功連動移除");
             render(); 
             updateFilterOptions(); 
-            localStorage.setItem('my_stocks', JSON.stringify(stocks)); 
         }
 
         function updateFilterOptions() {
@@ -622,9 +668,11 @@
 
         function clearHistory() { 
             history = []; 
+            stocks = [];
             localStorage.setItem('my_history', JSON.stringify(history)); 
-            updateStatus("🗑️ 歷史交易明細已全部清空");
-            renderHistory(); 
+            localStorage.setItem('my_stocks', JSON.stringify(stocks));
+            updateStatus("🗑️ 帳目已全面初始化清空");
+            render(); 
             updateFilterOptions();
         }
         
@@ -634,6 +682,8 @@
             updateStatus('💾 數據已安全同步儲存至本地瀏覽器！'); 
         }
 
+        // 初始化第一次載入時，先依據歷史紀錄校正一次庫存，確保完全對齊
+        recalculateStocksFromHistory();
         updateFilterOptions();
         render();
         setTimeout(refreshAllPrices, 1500);
