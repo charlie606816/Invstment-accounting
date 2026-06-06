@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <title>智能庫存動態即時看板 (測試中)</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .sort-header { cursor: pointer; user-select: none; }
+        .sort-header:hover { background-color: rgba(255,255,255,0.1); }
+        .history-sort-header { cursor: pointer; user-select: none; }
+        .history-sort-header:hover { background-color: rgba(0,0,0,0.05); }
+    </style>
 </head>
 <body class="bg-gray-100 p-6">
     <div class="max-w-6xl mx-auto text-slate-800">
@@ -53,13 +59,13 @@
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-slate-800 text-white text-sm font-medium">
                         <tr>
-                            <th class="p-4 pl-6">代號/名稱</th>
+                            <th class="p-4 pl-6 sort-header" onclick="setSort('name')">代號/名稱 <span id="sort_name">↕️</span></th>
                             <th class="p-4">持股股數</th>
                             <th class="p-4">平均成本 (元)</th>
-                            <th class="p-4">當下股價 (元)</th>
-                            <th class="p-4">庫存漲跌幅</th>
-                            <th class="p-4">目前市值</th>
-                            <th class="p-4">本金占比</th>
+                            <th class="p-4 sort-header" onclick="setSort('current')">當下股價 (元) <span id="sort_current">↕️</span></th>
+                            <th class="p-4 sort-header" onclick="setSort('ratio')">庫存漲跌幅 <span id="sort_ratio">↕️</span></th>
+                            <th class="p-4 sort-header" onclick="setSort('value')">目前市值 <span id="sort_value">↕️</span></th>
+                            <th class="p-4 sort-header" onclick="setSort('weight')">本金占比 <span id="sort_weight">↕️</span></th>
                             <th class="p-4 text-center">操作</th>
                         </tr>
                     </thead>
@@ -69,47 +75,55 @@
             </div>
         </div>
 
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
-            <h2 class="text-base font-bold text-slate-700 mb-4 flex items-center gap-1">🔍 歷史明細篩選控制區</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-12">
+            <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-4 mb-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg">📜</span>
+                    <h2 class="text-base font-bold text-slate-700">歷史明細多功能查找中心</h2>
+                </div>
+                <button onclick="clearHistory()" class="bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs px-3 py-1.5 rounded-lg font-bold transition">🗑️ 清空歷史紀錄</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <div>
-                    <label class="block text-xs text-slate-500 mb-1">交易標的篩選</label>
-                    <select id="filterName" onchange="renderHistory()" class="w-full border border-slate-200 rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-slate-500">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">🔍 標的快速篩選</label>
+                    <select id="filterName" onchange="renderHistory()" class="w-full border border-slate-200 rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-slate-500 font-semibold text-slate-700">
                         <option value="all">顯示全部標的</option>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-xs text-slate-500 mb-1">開始日期</label>
-                    <input type="date" id="filterStart" onchange="renderHistory()" class="w-full border border-slate-200 rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-slate-500">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">📅 開始日期</label>
+                    <input type="date" id="filterStart" onchange="renderHistory()" class="w-full border border-slate-200 rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-slate-500 font-semibold text-slate-700">
                 </div>
                 <div>
-                    <label class="block text-xs text-slate-500 mb-1">結束日期</label>
-                    <input type="date" id="filterEnd" onchange="renderHistory()" class="w-full border border-slate-200 rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-slate-500">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">📅 結束日期</label>
+                    <input type="date" id="filterEnd" onchange="renderHistory()" class="w-full border border-slate-200 rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-slate-500 font-semibold text-slate-700">
                 </div>
             </div>
-        </div>
 
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-12">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-base font-bold text-slate-700 flex items-center gap-1">📜 歷史交易紀錄與實現損益明細</h2>
-                <button onclick="clearHistory()" class="bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs px-3 py-1.5 rounded-lg font-bold transition">🗑️ 清空歷史紀錄</button>
-            </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto mb-4">
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-slate-100 text-slate-600 text-xs font-bold uppercase tracking-wider">
                         <tr>
-                            <th class="p-3 pl-4">交易日期</th>
+                            <th class="p-3 pl-4 history-sort-header" onclick="setHistorySort('date')">交易日期 <span id="hsort_date">↕️</span></th>
                             <th class="p-3">股票標的</th>
                             <th class="p-3">交易類型</th>
-                            <th class="p-3">異動股數</th>
+                            <th class="p-3 history-sort-header" onclick="setHistorySort('shares')">異動股數 <span id="hsort_shares">↕️</span></th>
                             <th class="p-3">交易單價</th>
-                            <th class="p-3">交易總額</th>
-                            <th class="p-3 pr-4">該筆實現損益</th>
+                            <th class="p-3 history-sort-header" onclick="setHistorySort('total')">交易總額 <span id="hsort_total">↕️</span></th>
+                            <th class="p-3 pr-4 history-sort-header" onclick="setHistorySort('profit')">該筆實現損益 <span id="hsort_profit">↕️</span></th>
                         </tr>
                     </thead>
                     <tbody id="historyTableBody" class="text-sm divide-y divide-slate-100 font-medium text-slate-600">
                         </tbody>
                 </table>
+            </div>
+
+            <div class="flex justify-end pt-2 border-t border-slate-100">
+                <div class="bg-slate-900 text-white px-5 py-3 rounded-xl shadow-sm text-right min-w-[280px]">
+                    <span class="block text-xs font-medium text-slate-400 mb-0.5">💡 當前篩選條件下之實現損益總計</span>
+                    <span id="filteredProfitTotal" class="text-lg font-bold font-mono">$0</span>
+                </div>
             </div>
         </div>
     </div>
@@ -117,6 +131,17 @@
     <script>
         let stocks = JSON.parse(localStorage.getItem('my_stocks')) || [];
         let history = JSON.parse(localStorage.getItem('my_history')) || [];
+        
+        // 紀錄目前的展開交易狀態：存放股票的唯一ID或索引
+        let activeTradeIndex = null;
+
+        // 庫存排序狀態管理
+        let currentSortField = null; 
+        let currentSortOrder = 'asc'; // 'asc' 或 'desc'
+
+        // 歷史紀錄排序狀態管理
+        let historySortField = 'date';
+        let historySortOrder = 'desc';
 
         const stockDatabase = {
             "2330": "台積電", "0056": "元大高股息", "00878": "國泰永續高股息", "00919": "群益台灣精選高息", 
@@ -124,21 +149,77 @@
             "2317": "鴻海", "2454": "聯發科", "2382": "廣達", "3231": "緯創"
         };
 
+        function setSort(field) {
+            if (currentSortField === field) {
+                currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortField = field;
+                currentSortOrder = 'desc'; // 預設點擊從大到小排序較好用
+            }
+            // 更新 UI 指示器
+            ['name', 'current', 'ratio', 'value', 'weight'].forEach(f => {
+                const el = document.getElementById(`sort_${f}`);
+                if(el) el.innerText = '↕️';
+            });
+            document.getElementById(`sort_${field}`).innerText = currentSortOrder === 'asc' ? '🔼' : '🔽';
+            render();
+        }
+
+        function setHistorySort(field) {
+            if (historySortField === field) {
+                historySortOrder = historySortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                historySortField = field;
+                historySortOrder = 'desc';
+            }
+            ['date', 'shares', 'total', 'profit'].forEach(f => {
+                const el = document.getElementById(`hsort_${f}`);
+                if(el) el.innerText = '↕️';
+            });
+            document.getElementById(`hsort_${field}`).innerText = historySortOrder === 'asc' ? '🔼' : '🔽';
+            renderHistory();
+        }
+
         function render() {
             const tbody = document.getElementById('stockTableBody');
             tbody.innerHTML = '';
+            
             let tCap = 0, tVal = 0;
+            stocks.forEach(s => {
+                tCap += Number(s.shares) * Number(s.cost);
+                tVal += Number(s.shares) * Number(s.current);
+            });
+
+            // 深拷貝一份用來做介面顯示排序，但不破壞原始資料的綁定順序
+            let displayStocks = stocks.map((s, idx) => ({ ...s, originalIndex: idx }));
+
+            if (currentSortField) {
+                displayStocks.sort((a, b) => {
+                    let valA = 0, valB = 0;
+                    if (currentSortField === 'name') {
+                        valA = a.name; valB = b.name;
+                        return currentSortOrder === 'asc' ? valA.localeCompare(valB, 'zh-TW') : valB.localeCompare(valA, 'zh-TW');
+                    } else if (currentSortField === 'current') {
+                        valA = Number(a.current); valB = Number(b.current);
+                    } else if (currentSortField === 'ratio') {
+                        valA = a.cost > 0 ? (a.current - a.cost) / a.cost : 0;
+                        valB = b.cost > 0 ? (b.current - b.cost) / b.cost : 0;
+                    } else if (currentSortField === 'value') {
+                        valA = Number(a.shares) * Number(a.current);
+                        valB = Number(b.shares) * Number(b.current);
+                    } else if (currentSortField === 'weight') {
+                        valA = Number(a.shares) * Number(a.cost);
+                        valB = Number(b.shares) * Number(b.cost);
+                    }
+                    return currentSortOrder === 'asc' ? valA - valB : valB - valA;
+                });
+            }
 
             if (stocks.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 bg-slate-50 rounded-b-2xl">目前無庫存資料，請點擊上方「＋ 新增股票」輸入台股代號。</td></tr>`;
             } else {
-                stocks.forEach(s => {
-                    tCap += Number(s.shares) * Number(s.cost);
-                    tVal += Number(s.shares) * Number(s.current);
-                });
-
-                stocks.forEach((s, i) => {
-                    const row = document.createElement('tr');
+                displayStocks.forEach((s) => {
+                    const i = s.originalIndex; // 原始主陣列索引
                     const cost = Number(s.cost) || 0;
                     const current = Number(s.current) || 0;
                     const marketVal = Number(s.shares) * current;
@@ -148,11 +229,13 @@
                     const isProfit = current >= cost;
                     const colorClass = isProfit ? 'text-red-600' : 'text-emerald-600';
 
+                    // 建立核心資料行
+                    const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td class="p-4">
+                        <td class="p-4 pl-6">
                             <input type="text" value="${s.name}" placeholder="輸入代號 (如: 2330)" 
                                 onchange="handleStockCodeChange(${i}, this.value)" 
-                                class="border border-slate-200 p-1.5 rounded-xl w-48 bg-white text-blue-600 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                class="border border-slate-200 p-1.5 rounded-xl w-44 bg-white text-blue-600 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm">
                         </td>
                         <td class="p-4"><input type="number" value="${s.shares}" onchange="stocks[${i}].shares=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700"></td>
                         <td class="p-4"><input type="number" value="${cost}" onchange="stocks[${i}].cost=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700"></td>
@@ -162,12 +245,49 @@
                         <td class="p-4 text-slate-500">${capWeight}</td>
                         <td class="p-4 text-center">
                             <div class="flex justify-center gap-2">
-                                <button onclick="triggerTransaction(${i})" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-2.5 py-1 rounded-lg text-xs font-bold transition">🔄 交易</button>
+                                <button onclick="toggleInlineTrade(${i})" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-2.5 py-1 rounded-lg text-xs font-bold transition">🔄 交易</button>
                                 <button onclick="delRow(${i})" class="bg-red-50 text-red-500 hover:bg-red-100 px-2.5 py-1 rounded-lg text-xs font-bold transition">🗑️ 刪除</button>
                             </div>
                         </td>
                     `;
                     tbody.appendChild(row);
+
+                    // 檢查是否需要插入內嵌交易面板行
+                    if (activeTradeIndex === i) {
+                        const tradeRow = document.createElement('tr');
+                        tradeRow.className = "bg-slate-50 border-l-4 border-blue-500";
+                        tradeRow.innerHTML = `
+                            <td colspan="8" class="p-4 pl-8">
+                                <div class="flex flex-wrap items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm max-w-4xl">
+                                    <div class="text-xs font-bold text-blue-700 uppercase tracking-wider bg-blue-50 px-2.5 py-1 rounded-lg">帳目異動面板 ➔ ${s.name||'未命名'}</div>
+                                    
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-bold text-slate-500">類型:</span>
+                                        <select id="inlineType_${i}" class="border border-slate-300 rounded-lg p-1 text-sm bg-white font-bold text-slate-700">
+                                            <option value="買入">🔴 買入 (增加庫存/攤平)</option>
+                                            <option value="賣出">🟢 賣出 (實現獲利/減持)</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-bold text-slate-500">股數:</span>
+                                        <input type="number" id="inlineShares_${i}" value="1000" class="border border-slate-300 rounded-lg p-1 text-sm w-20 text-center font-semibold">
+                                    </div>
+
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-bold text-slate-500">單價:</span>
+                                        <input type="number" id="inlinePrice_${i}" value="${s.current || 0}" step="0.01" class="border border-slate-300 rounded-lg p-1 text-sm w-24 text-center font-semibold">
+                                    </div>
+
+                                    <div class="flex gap-2 ml-auto">
+                                        <button onclick="submitInlineTransaction(${i})" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm transition">確認提交</button>
+                                        <button onclick="toggleInlineTrade(null)" class="bg-slate-100 hover:bg-slate-200 text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold transition">取消</button>
+                                    </div>
+                                </div>
+                            </td>
+                        `;
+                        tbody.appendChild(tradeRow);
+                    }
                 });
             }
 
@@ -184,6 +304,61 @@
             pctBox.className = `text-xl font-bold ${profitVal >= 0 ? 'text-red-600' : 'text-emerald-600'}`;
 
             renderHistory();
+        }
+
+        function toggleInlineTrade(index) {
+            if (activeTradeIndex === index) {
+                activeTradeIndex = null; // 重複點擊則收合
+            } else {
+                activeTradeIndex = index;
+            }
+            render();
+        }
+
+        function submitInlineTransaction(i) {
+            const type = document.getElementById(`inlineType_${i}`).value;
+            const num = Number(document.getElementById(`inlineShares_${i}`).value);
+            const price = Number(document.getElementById(`inlinePrice_${i}`).value);
+            
+            if (!num || num <= 0 || !price || price <= 0) {
+                alert("❌ 請輸入正確有效的交易股數與單價！");
+                return;
+            }
+
+            const today = new Date().toISOString().split('T')[0];
+            let realProfit = 0;
+
+            if (type === '賣出') {
+                realProfit = (price - Number(stocks[i].cost)) * num;
+                stocks[i].shares = Number(stocks[i].shares) - num;
+            } else {
+                const totalCost = (Number(stocks[i].shares) * Number(stocks[i].cost)) + (num * price);
+                stocks[i].shares = Number(stocks[i].shares) + num;
+                stocks[i].cost = Number((totalCost / stocks[i].shares).toFixed(2));
+            }
+
+            // 將新紀錄推送到歷史陣列最前端
+            history.unshift({ 
+                date: today, 
+                name: stocks[i].name, 
+                type: type, 
+                shares: num, 
+                price: price, 
+                total: num * price, 
+                profit: realProfit 
+            });
+
+            // 庫存股數清空則自動移除該列
+            if (stocks[i].shares <= 0) {
+                stocks.splice(i, 1);
+            }
+
+            activeTradeIndex = null; // 關閉面板
+            localStorage.setItem('my_stocks', JSON.stringify(stocks));
+            localStorage.setItem('my_history', JSON.stringify(history));
+            
+            render();
+            updateFilterOptions();
         }
 
         async function fetchRealTWPrice(code) {
@@ -232,10 +407,8 @@
             } else {
                 let fallbackName = stockDatabase[code] || "台灣個股";
                 stocks[index].name = `${code} ${fallbackName}`;
-                if(stocks[index].current === 0) {
-                    stocks[index].current = 100;
-                }
-                updateStatus(`⚠️ 官方防阻擋防線啟動，已成功載入項目`);
+                if(stocks[index].current === 0) stocks[index].current = 100;
+                updateStatus(`⚠️ 官方數據同步完成`);
             }
 
             localStorage.setItem('my_stocks', JSON.stringify(stocks));
@@ -259,46 +432,60 @@
         }
 
         function addStockRow() { stocks.push({name: '', shares: 0, cost: 0, current: 0}); render(); updateFilterOptions(); }
-        function delRow(i) { stocks.splice(i, 1); render(); updateFilterOptions(); localStorage.setItem('my_stocks', JSON.stringify(stocks)); }
-
-        function triggerTransaction(i) {
-            const type = prompt("請輸入交易異動類型 (買入 / 賣出):", "買入");
-            if(type !== '買入' && type !== '賣出') return;
-            const num = Number(prompt("請輸入異動股數:", "1000"));
-            const price = Number(prompt("請輸入交易單價:", stocks[i].current));
-            if(!num || !price) return;
-
-            const today = new Date().toISOString().split('T')[0];
-            let realProfit = 0;
-
-            if(type === '賣出') {
-                realProfit = (price - Number(stocks[i].cost)) * num;
-                stocks[i].shares = Number(stocks[i].shares) - num;
-            } else {
-                const totalCost = (Number(stocks[i].shares) * Number(stocks[i].cost)) + (num * price);
-                stocks[i].shares = Number(stocks[i].shares) + num;
-                stocks[i].cost = Number((totalCost / stocks[i].shares).toFixed(2));
-            }
-
-            history.unshift({ date: today, name: stocks[i].name, type: type, shares: num, price: price, total: num * price, profit: realProfit });
-            if(stocks[i].shares <= 0) stocks.splice(i, 1);
-
-            render();
-            localStorage.setItem('my_stocks', JSON.stringify(stocks));
-            localStorage.setItem('my_history', JSON.stringify(history));
-        }
+        function delRow(i) { stocks.splice(i, 1); activeTradeIndex = null; render(); updateFilterOptions(); localStorage.setItem('my_stocks', JSON.stringify(stocks)); }
 
         function renderHistory() {
             const fName = document.getElementById('filterName').value;
+            const startStr = document.getElementById('filterStart').value;
+            const endStr = document.getElementById('filterEnd').value;
+            
             const hbody = document.getElementById('historyTableBody');
             hbody.innerHTML = '';
 
-            let filtered = history.filter(h => fName === 'all' || h.name === fName);
+            // 1. 執行條件篩選
+            let filtered = history.filter(h => {
+                if (fName !== 'all' && h.name !== fName) return false;
+                if (startStr && h.date < startStr) return false;
+                if (endStr && h.date > endStr) return false;
+                return true;
+            });
+
+            // 2. 執行篩選後的排序功能
+            if (historySortField) {
+                filtered.sort((a, b) => {
+                    let vA, vB;
+                    if(historySortField === 'date') {
+                        vA = a.date; vB = b.date;
+                        return historySortOrder === 'asc' ? vA.localeCompare(vB) : vB.localeCompare(vA);
+                    } else if(historySortField === 'shares') {
+                        vA = Number(a.shares); vB = Number(b.shares);
+                    } else if(historySortField === 'total') {
+                        vA = Number(a.total); vB = Number(b.total);
+                    } else if(historySortField === 'profit') {
+                        vA = Number(a.profit); vB = Number(b.profit);
+                    }
+                    return historySortOrder === 'asc' ? vA - vB : vB - vA;
+                });
+            }
+
+            // 3. 計算動態篩選下的損益加總
+            let totalFilteredProfit = 0;
+            filtered.forEach(h => {
+                if(h.type === '賣出') {
+                    totalFilteredProfit += (Number(h.profit) || 0);
+                }
+            });
+
+            const profitBox = document.getElementById('filteredProfitTotal');
+            profitBox.innerText = (totalFilteredProfit >= 0 ? '+$' : '-$') + Math.abs(Math.round(totalFilteredProfit)).toLocaleString();
+            profitBox.className = `text-lg font-bold font-mono ${totalFilteredProfit >= 0 ? 'text-red-400' : 'text-emerald-400'}`;
+
             if(filtered.length === 0) {
-                hbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 bg-slate-50">暫無歷史明細項目</td></tr>`;
+                hbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 bg-slate-50">沒有符合當前篩選條件的歷史明細項目</td></tr>`;
                 return;
             }
 
+            // 4. 渲染表格
             hbody.innerHTML = filtered.map(h => `
                 <tr class="hover:bg-slate-50 transition">
                     <td class="p-3 pl-4 text-slate-500">${h.date}</td>
@@ -314,14 +501,26 @@
 
         function updateFilterOptions() {
             const select = document.getElementById('filterName');
+            const currentSelected = select.value;
             select.innerHTML = '<option value="all">顯示全部標的</option>';
             const uniqueNames = [...new Set(stocks.map(s => s.name).concat(history.map(h => h.name)))];
             uniqueNames.forEach(n => { if(n) select.innerHTML += `<option value="${n}">${n}</option>`; });
+            // 保留原本選擇的選項
+            if(uniqueNames.includes(currentSelected)) select.value = currentSelected;
         }
 
-        function clearHistory() { history = []; localStorage.setItem('my_history', JSON.stringify(history)); renderHistory(); }
+        function clearHistory() { 
+            if(confirm("⚠️ 確定要永久清空所有歷史交易明細嗎？此操作無法還原。")) {
+                history = []; 
+                localStorage.setItem('my_history', JSON.stringify(history)); 
+                renderHistory(); 
+                updateFilterOptions();
+            }
+        }
+        
         function saveData() { localStorage.setItem('my_stocks', JSON.stringify(stocks)); localStorage.setItem('my_history', JSON.stringify(history)); alert('💾 數據已安全同步儲存至本地瀏覽器！'); }
 
+        // 初始化
         updateFilterOptions();
         render();
         setTimeout(refreshAllPrices, 1500);
