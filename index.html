@@ -6,58 +6,58 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .sort-header { cursor: pointer; user-select: none; }
-        .sort-header:hover { background-color: rgba(255,255,255,0.1); }
+        .sort-header:hover { background-color: rgba(255,255,255,0.05); }
         .history-sort-header { cursor: pointer; user-select: none; }
-        .history-sort-header:hover { background-color: rgba(0,0,0,0.05); }
+        .history-sort-header:hover { background-color: rgba(0,0,0,0.03); }
     </style>
 </head>
-<body class="bg-gray-100 p-6">
-    <div class="max-w-6xl mx-auto text-slate-800">
-        <div class="flex items-center justify-center gap-3 mb-6">
-            <span class="text-3xl filter drop-shadow-sm">🦊</span>
-            <h1 class="text-2xl font-bold text-slate-800 tracking-wide">智能庫存動態即時看板 (測試中)</h1>
+<body class="bg-slate-50 min-h-screen p-6 text-slate-800 antialiased">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex items-center justify-center gap-3 mb-8">
+            <span class="text-4xl filter drop-shadow-sm">🦊</span>
+            <h1 class="text-2xl font-black text-slate-800 tracking-wide">智能庫存動態即時看板 <span class="text-sm font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md ml-1">測試中</span></h1>
         </div>
         
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60 mb-6">
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <label class="block text-xs font-medium text-slate-500 mb-1">投入總本金 (元)</label>
-                    <span id="totalCapital" class="text-xl font-bold text-slate-700">0</span>
+                <div class="bg-slate-50/60 p-4 rounded-xl border border-slate-100">
+                    <label class="block text-xs font-bold text-slate-400 mb-1">投入總本金 (元)</label>
+                    <span id="totalCapital" class="text-xl font-bold text-slate-700 tracking-tight">0</span>
                 </div>
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <label class="block text-xs font-medium text-slate-500 mb-1">目前總現值 (元)</label>
-                    <span id="totalValue" class="text-xl font-bold text-slate-700">0</span>
+                <div class="bg-slate-50/60 p-4 rounded-xl border border-slate-100">
+                    <label class="block text-xs font-bold text-slate-400 mb-1">目前總現值 (元)</label>
+                    <span id="totalValue" class="text-xl font-bold text-slate-700 tracking-tight">0</span>
                 </div>
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <label class="block text-xs font-medium text-slate-500 mb-1">庫存總損益金額 (元)</label>
-                    <span id="totalProfit" class="text-xl font-bold text-slate-700">0</span>
+                <div class="bg-slate-50/60 p-4 rounded-xl border border-slate-100">
+                    <label class="block text-xs font-bold text-slate-400 mb-1">庫存總損益金額 (元)</label>
+                    <span id="totalProfit" class="text-xl font-bold text-slate-700 tracking-tight">0</span>
                 </div>
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <label class="block text-xs font-medium text-slate-500 mb-1">總損益百分比 (%)</label>
-                    <span id="totalPercent" class="text-xl font-bold text-slate-700">0.00%</span>
+                <div class="bg-slate-50/60 p-4 rounded-xl border border-slate-100">
+                    <label class="block text-xs font-bold text-slate-400 mb-1">總損益百分比 (%)</label>
+                    <span id="totalPercent" class="text-xl font-bold text-slate-700 tracking-tight">0.00%</span>
                 </div>
             </div>
             
             <div class="flex flex-wrap gap-4 items-center">
-                <button onclick="addStockRow()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-bold transition flex items-center gap-1 shadow-sm">
+                <button onclick="addStockRow()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold transition flex items-center gap-1 shadow-sm text-sm">
                     <span>＋</span> 新增股票
                 </button>
-                <button onclick="refreshAllPrices()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold transition flex items-center gap-1 shadow-sm">
+                <button onclick="refreshAllPrices()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold transition flex items-center gap-1 shadow-sm text-sm">
                     <span>🔄</span> 核心強制刷新所有股價
                 </button>
-                <button onclick="saveData()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-xl font-bold transition flex items-center gap-1 shadow-sm">
+                <button onclick="saveData()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl font-bold transition flex items-center gap-1 shadow-sm text-sm">
                     <span>💾</span> 手動即時存檔
                 </button>
-                <span id="sysStatus" class="text-xs text-slate-400 flex items-center gap-1 ml-2">
+                <span id="sysStatus" class="text-xs text-slate-400 flex items-center gap-1.5 ml-2 font-medium">
                     <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 系統官方連線正常
                 </span>
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden mb-6">
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-800 text-white text-sm font-medium">
+                    <thead class="bg-slate-800 text-slate-200 text-xs font-bold uppercase tracking-wider">
                         <tr>
                             <th class="p-4 pl-6 sort-header" onclick="setSort('name')">代號/名稱 <span id="sort_name">↕️</span></th>
                             <th class="p-4">持股股數</th>
@@ -75,11 +75,11 @@
             </div>
         </div>
 
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-12">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60 mb-12">
             <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-4 mb-4">
                 <div class="flex items-center gap-2">
                     <span class="text-lg">📜</span>
-                    <h2 class="text-base font-bold text-slate-700">歷史明細多功能查找中心</h2>
+                    <h2 class="text-base font-bold text-slate-700">歷史明細多功能查找與管理中心</h2>
                 </div>
                 <button onclick="clearHistory()" class="bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs px-3 py-1.5 rounded-lg font-bold transition">🗑️ 清空歷史紀錄</button>
             </div>
@@ -103,7 +103,7 @@
 
             <div class="overflow-x-auto mb-4">
                 <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-100 text-slate-600 text-xs font-bold uppercase tracking-wider">
+                    <thead class="bg-slate-100 text-slate-600 text-xs font-bold uppercase tracking-wider border-b border-slate-200">
                         <tr>
                             <th class="p-3 pl-4 history-sort-header" onclick="setHistorySort('date')">交易日期 <span id="hsort_date">↕️</span></th>
                             <th class="p-3">股票標的</th>
@@ -112,6 +112,7 @@
                             <th class="p-3">交易單價</th>
                             <th class="p-3 history-sort-header" onclick="setHistorySort('total')">交易總額 <span id="hsort_total">↕️</span></th>
                             <th class="p-3 pr-4 history-sort-header" onclick="setHistorySort('profit')">該筆實現損益 <span id="hsort_profit">↕️</span></th>
+                            <th class="p-3 text-center">歷史操作</th>
                         </tr>
                     </thead>
                     <tbody id="historyTableBody" class="text-sm divide-y divide-slate-100 font-medium text-slate-600">
@@ -132,14 +133,12 @@
         let stocks = JSON.parse(localStorage.getItem('my_stocks')) || [];
         let history = JSON.parse(localStorage.getItem('my_history')) || [];
         
-        // 紀錄目前的展開交易狀態：存放股票的唯一ID或索引
         let activeTradeIndex = null;
+        let editingHistoryId = null; 
 
-        // 庫存排序狀態管理
         let currentSortField = null; 
-        let currentSortOrder = 'asc'; // 'asc' 或 'desc'
+        let currentSortOrder = 'asc'; 
 
-        // 歷史紀錄排序狀態管理
         let historySortField = 'date';
         let historySortOrder = 'desc';
 
@@ -154,9 +153,8 @@
                 currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
             } else {
                 currentSortField = field;
-                currentSortOrder = 'desc'; // 預設點擊從大到小排序較好用
+                currentSortOrder = 'desc';
             }
-            // 更新 UI 指示器
             ['name', 'current', 'ratio', 'value', 'weight'].forEach(f => {
                 const el = document.getElementById(`sort_${f}`);
                 if(el) el.innerText = '↕️';
@@ -180,7 +178,19 @@
             renderHistory();
         }
 
+        function ensureHistoryIds() {
+            let changed = false;
+            history.forEach(h => {
+                if (!h.id) {
+                    h.id = 'h_' + Math.random().toString(36).substr(2, 9) + Date.now();
+                    changed = true;
+                }
+            });
+            if(changed) localStorage.setItem('my_history', JSON.stringify(history));
+        }
+
         function render() {
+            ensureHistoryIds();
             const tbody = document.getElementById('stockTableBody');
             tbody.innerHTML = '';
             
@@ -190,7 +200,6 @@
                 tVal += Number(s.shares) * Number(s.current);
             });
 
-            // 深拷貝一份用來做介面顯示排序，但不破壞原始資料的綁定順序
             let displayStocks = stocks.map((s, idx) => ({ ...s, originalIndex: idx }));
 
             if (currentSortField) {
@@ -218,8 +227,8 @@
             if (stocks.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 bg-slate-50 rounded-b-2xl">目前無庫存資料，請點擊上方「＋ 新增股票」輸入台股代號。</td></tr>`;
             } else {
-                displayStocks.forEach((s) => {
-                    const i = s.originalIndex; // 原始主陣列索引
+                displayStocks.forEach((s, idx) => {
+                    const i = s.originalIndex; 
                     const cost = Number(s.cost) || 0;
                     const current = Number(s.current) || 0;
                     const marketVal = Number(s.shares) * current;
@@ -228,55 +237,61 @@
                     
                     const isProfit = current >= cost;
                     const colorClass = isProfit ? 'text-red-600' : 'text-emerald-600';
+                    const zebraBg = idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white';
 
-                    // 建立核心資料行
                     const row = document.createElement('tr');
+                    row.className = `${zebraBg} hover:bg-slate-50 transition duration-150`;
                     row.innerHTML = `
                         <td class="p-4 pl-6">
                             <input type="text" value="${s.name}" placeholder="輸入代號 (如: 2330)" 
                                 onchange="handleStockCodeChange(${i}, this.value)" 
-                                class="border border-slate-200 p-1.5 rounded-xl w-44 bg-white text-blue-600 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm">
+                                class="border border-slate-200 p-1.5 rounded-xl w-44 bg-white text-blue-600 font-bold focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-sm">
                         </td>
-                        <td class="p-4"><input type="number" value="${s.shares}" onchange="stocks[${i}].shares=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700"></td>
-                        <td class="p-4"><input type="number" value="${cost}" onchange="stocks[${i}].cost=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700"></td>
-                        <td class="p-4"><input type="number" value="${current}" readonly class="border border-slate-100 p-1.5 rounded-xl w-24 text-slate-600 bg-gray-100 cursor-not-allowed font-semibold"></td>
-                        <td class="p-4 font-bold ${colorClass}">${isProfit ? '+' : ''}${diffRatio}%</td>
-                        <td class="p-4 text-slate-600">$${Math.round(marketVal).toLocaleString()}</td>
-                        <td class="p-4 text-slate-500">${capWeight}</td>
+                        <td class="p-4"><input type="number" value="${s.shares}" onchange="stocks[${i}].shares=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700 font-semibold shadow-sm"></td>
+                        <td class="p-4"><input type="number" value="${cost}" onchange="stocks[${i}].cost=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700 font-semibold shadow-sm"></td>
+                        <td class="p-4"><input type="number" value="${current}" readonly class="border border-slate-100 p-1.5 rounded-xl w-24 text-slate-600 bg-slate-100/80 cursor-not-allowed font-bold"></td>
+                        <td class="p-4 font-black ${colorClass}">${isProfit ? '+' : ''}${diffRatio}%</td>
+                        <td class="p-4 text-slate-600 font-semibold">$${Math.round(marketVal).toLocaleString()}</td>
+                        <td class="p-4 text-slate-400 font-medium">${capWeight}</td>
                         <td class="p-4 text-center">
                             <div class="flex justify-center gap-2">
-                                <button onclick="toggleInlineTrade(${i})" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-2.5 py-1 rounded-lg text-xs font-bold transition">🔄 交易</button>
-                                <button onclick="delRow(${i})" class="bg-red-50 text-red-500 hover:bg-red-100 px-2.5 py-1 rounded-lg text-xs font-bold transition">🗑️ 刪除</button>
+                                <button onclick="toggleInlineTrade(${i})" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm">🔄 交易</button>
+                                <button onclick="delRow(${i})" class="bg-red-50 text-red-500 hover:bg-red-100 px-3 py-1.5 rounded-xl text-xs font-bold transition">🗑️ 刪除</button>
                             </div>
                         </td>
                     `;
                     tbody.appendChild(row);
 
-                    // 檢查是否需要插入內嵌交易面板行
                     if (activeTradeIndex === i) {
+                        const today = new Date().toISOString().split('T')[0];
                         const tradeRow = document.createElement('tr');
-                        tradeRow.className = "bg-slate-50 border-l-4 border-blue-500";
+                        tradeRow.className = "bg-slate-100/70 border-l-4 border-blue-600 transition-all duration-200";
                         tradeRow.innerHTML = `
                             <td colspan="8" class="p-4 pl-8">
-                                <div class="flex flex-wrap items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm max-w-4xl">
-                                    <div class="text-xs font-bold text-blue-700 uppercase tracking-wider bg-blue-50 px-2.5 py-1 rounded-lg">帳目異動面板 ➔ ${s.name||'未命名'}</div>
+                                <div class="flex flex-wrap items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-md max-w-5xl">
+                                    <div class="text-xs font-black text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">帳目異動面板 ➔ ${s.name||'未命名'}</div>
                                     
                                     <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-bold text-slate-500">交易日期:</span>
+                                        <input type="date" id="inlineDate_${i}" value="${today}" class="border border-slate-200 rounded-lg p-1.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    </div>
+
+                                    <div class="flex items-center gap-1.5">
                                         <span class="text-xs font-bold text-slate-500">類型:</span>
-                                        <select id="inlineType_${i}" class="border border-slate-300 rounded-lg p-1 text-sm bg-white font-bold text-slate-700">
-                                            <option value="買入">🔴 買入 (增加庫存/攤平)</option>
-                                            <option value="賣出">🟢 賣出 (實現獲利/減持)</option>
+                                        <select id="inlineType_${i}" class="border border-slate-200 rounded-lg p-1.5 text-sm bg-white font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                            <option value="買入">➕ 買進 (增加庫存/攤平)</option>
+                                            <option value="賣出">➖ 賣出 (實現獲利/減持)</option>
                                         </select>
                                     </div>
 
                                     <div class="flex items-center gap-1.5">
                                         <span class="text-xs font-bold text-slate-500">股數:</span>
-                                        <input type="number" id="inlineShares_${i}" value="1000" class="border border-slate-300 rounded-lg p-1 text-sm w-20 text-center font-semibold">
+                                        <input type="number" id="inlineShares_${i}" placeholder="0" class="border border-slate-200 rounded-lg p-1.5 text-sm w-24 text-center font-bold focus:outline-none focus:ring-1 focus:ring-blue-500">
                                     </div>
 
                                     <div class="flex items-center gap-1.5">
                                         <span class="text-xs font-bold text-slate-500">單價:</span>
-                                        <input type="number" id="inlinePrice_${i}" value="${s.current || 0}" step="0.01" class="border border-slate-300 rounded-lg p-1 text-sm w-24 text-center font-semibold">
+                                        <input type="number" id="inlinePrice_${i}" value="${s.current || 0}" step="0.01" class="border border-slate-200 rounded-lg p-1.5 text-sm w-24 text-center font-bold focus:outline-none focus:ring-1 focus:ring-blue-500">
                                     </div>
 
                                     <div class="flex gap-2 ml-auto">
@@ -297,37 +312,30 @@
             
             const pBox = document.getElementById('totalProfit');
             pBox.innerText = (profitVal >= 0 ? '+' : '') + Math.round(profitVal).toLocaleString();
-            pBox.className = `text-xl font-bold ${profitVal >= 0 ? 'text-red-600' : 'text-emerald-600'}`;
+            pBox.className = `text-xl font-black ${profitVal >= 0 ? 'text-red-600' : 'text-emerald-600'}`;
 
             const pctBox = document.getElementById('totalPercent');
             pctBox.innerText = (profitVal >= 0 ? '+' : '') + (tCap > 0 ? ((profitVal / tCap) * 100).toFixed(2) : '0.00') + '%';
-            pctBox.className = `text-xl font-bold ${profitVal >= 0 ? 'text-red-600' : 'text-emerald-600'}`;
+            pctBox.className = `text-xl font-black ${profitVal >= 0 ? 'text-red-600' : 'text-emerald-600'}`;
 
             renderHistory();
         }
 
         function toggleInlineTrade(index) {
-            if (activeTradeIndex === index) {
-                activeTradeIndex = null; // 重複點擊則收合
-            } else {
-                activeTradeIndex = index;
-            }
+            activeTradeIndex = (activeTradeIndex === index) ? null : index;
             render();
         }
 
         function submitInlineTransaction(i) {
+            const tradeDate = document.getElementById(`inlineDate_${i}`).value;
             const type = document.getElementById(`inlineType_${i}`).value;
             const num = Number(document.getElementById(`inlineShares_${i}`).value);
             const price = Number(document.getElementById(`inlinePrice_${i}`).value);
             
-            if (!num || num <= 0 || !price || price <= 0) {
-                alert("❌ 請輸入正確有效的交易股數與單價！");
-                return;
-            }
+            if (!tradeDate) { alert("❌ 請選擇正確的交易日期！"); return; }
+            if (!num || num <= 0 || !price || price <= 0) { alert("❌ 股數與單價必須大於 0！"); return; }
 
-            const today = new Date().toISOString().split('T')[0];
             let realProfit = 0;
-
             if (type === '賣出') {
                 realProfit = (price - Number(stocks[i].cost)) * num;
                 stocks[i].shares = Number(stocks[i].shares) - num;
@@ -337,9 +345,10 @@
                 stocks[i].cost = Number((totalCost / stocks[i].shares).toFixed(2));
             }
 
-            // 將新紀錄推送到歷史陣列最前端
+            const uniqueId = 'h_' + Math.random().toString(36).substr(2, 9) + Date.now();
             history.unshift({ 
-                date: today, 
+                id: uniqueId,
+                date: tradeDate, 
                 name: stocks[i].name, 
                 type: type, 
                 shares: num, 
@@ -348,17 +357,147 @@
                 profit: realProfit 
             });
 
-            // 庫存股數清空則自動移除該列
-            if (stocks[i].shares <= 0) {
-                stocks.splice(i, 1);
-            }
+            if (stocks[i].shares <= 0) stocks.splice(i, 1);
 
-            activeTradeIndex = null; // 關閉面板
+            activeTradeIndex = null; 
             localStorage.setItem('my_stocks', JSON.stringify(stocks));
             localStorage.setItem('my_history', JSON.stringify(history));
             
             render();
             updateFilterOptions();
+        }
+
+        function renderHistory() {
+            const fName = document.getElementById('filterName').value;
+            const startStr = document.getElementById('filterStart').value;
+            const endStr = document.getElementById('filterEnd').value;
+            const hbody = document.getElementById('historyTableBody');
+            hbody.innerHTML = '';
+
+            let filtered = history.filter(h => {
+                if (fName !== 'all' && h.name !== fName) return false;
+                if (startStr && h.date < startStr) return false;
+                if (endStr && h.date > endStr) return false;
+                return true;
+            });
+
+            if (historySortField) {
+                filtered.sort((a, b) => {
+                    let vA, vB;
+                    if(historySortField === 'date') {
+                        vA = a.date; vB = b.date;
+                        return historySortOrder === 'asc' ? vA.localeCompare(vB) : vB.localeCompare(vA);
+                    } else if(historySortField === 'shares') {
+                        vA = Number(a.shares); vB = Number(b.shares);
+                    } else if(historySortField === 'total') {
+                        vA = Number(a.total); vB = Number(b.total);
+                    } else if(historySortField === 'profit') {
+                        vA = Number(a.profit); vB = Number(b.profit);
+                    }
+                    return historySortOrder === 'asc' ? vA - vB : vB - vA;
+                });
+            }
+
+            let totalFilteredProfit = 0;
+            filtered.forEach(h => {
+                if(h.type === '賣出') totalFilteredProfit += (Number(h.profit) || 0);
+            });
+
+            const profitBox = document.getElementById('filteredProfitTotal');
+            profitBox.innerText = (totalFilteredProfit >= 0 ? '+$' : '-$') + Math.abs(Math.round(totalFilteredProfit)).toLocaleString();
+            profitBox.className = `text-lg font-bold font-mono ${totalFilteredProfit >= 0 ? 'text-red-400' : 'text-emerald-400'}`;
+
+            if(filtered.length === 0) {
+                hbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400 bg-slate-50/50">沒有符合當前篩選條件的歷史明細項目</td></tr>`;
+                return;
+            }
+
+            filtered.forEach((h, idx) => {
+                const tr = document.createElement('tr');
+                const zebraBg = idx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white';
+                tr.className = `${zebraBg} hover:bg-slate-50 transition duration-150`;
+
+                if (editingHistoryId === h.id) {
+                    tr.innerHTML = `
+                        <td class="p-2 pl-4"><input type="date" id="editDate_${h.id}" value="${h.date}" class="border border-slate-300 rounded p-1 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"></td>
+                        <td class="p-2 font-semibold text-slate-700 text-xs">${h.name}</td>
+                        <td class="p-2"><span class="px-2 py-0.5 rounded text-xs bg-slate-100 font-bold">${h.type}</span></td>
+                        <td class="p-2"><input type="number" id="editShares_${h.id}" value="${h.shares}" class="border border-slate-300 rounded p-1 text-xs w-20 text-center font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"></td>
+                        <td class="p-2"><input type="number" id="editPrice_${h.id}" value="${h.price}" step="0.01" class="border border-slate-300 rounded p-1 text-xs w-20 text-center font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"></td>
+                        <td class="p-2 text-xs text-slate-400">系統自動重算</td>
+                        <td class="p-2 text-xs text-slate-400">系統自動重算</td>
+                        <td class="p-2 text-center">
+                            <div class="flex justify-center gap-1.5">
+                                <button onclick="saveHistoryRow('${h.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded text-xs font-bold shadow-sm">💾 儲存</button>
+                                <button onclick="cancelHistoryEdit()" class="bg-slate-200 hover:bg-slate-300 text-slate-600 px-2 py-1 rounded text-xs font-bold">取消</button>
+                            </div>
+                        </td>
+                    `;
+                } else {
+                    const displayType = h.type === '買入' ? '➕ 買進' : '➖ 賣出';
+                    const typeColor = h.type === '買入' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600';
+                    tr.innerHTML = `
+                        <td class="p-3 pl-4 text-slate-500 text-xs">${h.date}</td>
+                        <td class="p-3 font-bold text-slate-700">${h.name}</td>
+                        <td class="p-3"><span class="px-2 py-0.5 rounded text-xs font-bold ${typeColor}">${displayType}</span></td>
+                        <td class="p-3 font-semibold">${h.shares.toLocaleString()}</td>
+                        <td class="p-3 font-semibold">$${h.price.toLocaleString()}</td>
+                        <td class="p-3 font-mono text-xs text-slate-500">$${Math.round(h.total).toLocaleString()}</td>
+                        <td class="p-3 font-bold ${h.profit >= 0 ? 'text-red-500' : 'text-emerald-500'}">${h.type === '賣出' ? '$' + Math.round(h.profit).toLocaleString() : '--'}</td>
+                        <td class="p-3 text-center">
+                            <div class="flex justify-center gap-2">
+                                <button onclick="editHistoryRow('${h.id}')" class="text-slate-400 hover:text-blue-600 px-1 py-0.5 rounded text-xs font-bold transition">✏️ 編輯</button>
+                                <button onclick="deleteHistoryRow('${h.id}')" class="text-slate-400 hover:text-red-500 px-1 py-0.5 rounded text-xs font-bold transition">🗑️ 刪除</button>
+                            </div>
+                        </td>
+                    `;
+                }
+                hbody.appendChild(tr);
+            });
+        }
+
+        function editHistoryRow(id) { editingHistoryId = id; renderHistory(); }
+        function cancelHistoryEdit() { editingHistoryId = null; renderHistory(); }
+
+        function saveHistoryRow(id) {
+            const newDate = document.getElementById(`editDate_${id}`).value;
+            const newShares = Number(document.getElementById(`editShares_${id}`).value);
+            const newPrice = Number(document.getElementById(`editPrice_${id}`).value);
+
+            if (!newDate || newShares <= 0 || newPrice <= 0) {
+                alert("❌ 請輸入有效的日期、數量與金額數值！");
+                return;
+            }
+
+            const targetIdx = history.findIndex(h => h.id === id);
+            if (targetIdx !== -1) {
+                let item = history[targetIdx];
+                item.date = newDate;
+                item.shares = newShares;
+                item.price = newPrice;
+                item.total = newShares * newPrice;
+                
+                if (item.type === '賣出') {
+                    const matchStock = stocks.find(s => s.name === item.name);
+                    const baseCost = matchStock ? Number(matchStock.cost) : newPrice; 
+                    item.profit = (newPrice - baseCost) * newShares;
+                }
+                
+                history[targetIdx] = item;
+                localStorage.setItem('my_history', JSON.stringify(history));
+            }
+
+            editingHistoryId = null;
+            render();
+        }
+
+        function deleteHistoryRow(id) {
+            if(confirm("確定要刪除此筆交易明細嗎？（這不會直接去回溯影響你上方的活體庫存均價，僅移出歷史對帳單）")) {
+                history = history.filter(h => h.id !== id);
+                localStorage.setItem('my_history', JSON.stringify(history));
+                render();
+                updateFilterOptions();
+            }
         }
 
         async function fetchRealTWPrice(code) {
@@ -384,9 +523,7 @@
                             return { price: Number(price), name: officialName };
                         }
                     }
-                } catch(e) {
-                    console.log("切換次級官方通道...");
-                }
+                } catch(e) { console.log("切換通道..."); }
             }
             return null;
         }
@@ -397,13 +534,13 @@
             if (!codeMatch) return;
             const code = codeMatch[0];
             
-            updateStatus(`🔍 正在安全連線台灣官方數據庫查詢 ${code} ...`);
+            updateStatus(`🔍 正在連線查詢台灣官方數據庫 ${code} ...`);
 
             const result = await fetchRealTWPrice(code);
             if(result) {
                 stocks[index].name = `${code} ${result.name}`;
                 stocks[index].current = result.price;
-                updateStatus(`✅ 官方數據載入成功: ${code} ${result.name} ($${result.price})`);
+                updateStatus(`✅ 數據載入成功: ${code} ${result.name} ($${result.price})`);
             } else {
                 let fallbackName = stockDatabase[code] || "台灣個股";
                 stocks[index].name = `${code} ${fallbackName}`;
@@ -434,78 +571,12 @@
         function addStockRow() { stocks.push({name: '', shares: 0, cost: 0, current: 0}); render(); updateFilterOptions(); }
         function delRow(i) { stocks.splice(i, 1); activeTradeIndex = null; render(); updateFilterOptions(); localStorage.setItem('my_stocks', JSON.stringify(stocks)); }
 
-        function renderHistory() {
-            const fName = document.getElementById('filterName').value;
-            const startStr = document.getElementById('filterStart').value;
-            const endStr = document.getElementById('filterEnd').value;
-            
-            const hbody = document.getElementById('historyTableBody');
-            hbody.innerHTML = '';
-
-            // 1. 執行條件篩選
-            let filtered = history.filter(h => {
-                if (fName !== 'all' && h.name !== fName) return false;
-                if (startStr && h.date < startStr) return false;
-                if (endStr && h.date > endStr) return false;
-                return true;
-            });
-
-            // 2. 執行篩選後的排序功能
-            if (historySortField) {
-                filtered.sort((a, b) => {
-                    let vA, vB;
-                    if(historySortField === 'date') {
-                        vA = a.date; vB = b.date;
-                        return historySortOrder === 'asc' ? vA.localeCompare(vB) : vB.localeCompare(vA);
-                    } else if(historySortField === 'shares') {
-                        vA = Number(a.shares); vB = Number(b.shares);
-                    } else if(historySortField === 'total') {
-                        vA = Number(a.total); vB = Number(b.total);
-                    } else if(historySortField === 'profit') {
-                        vA = Number(a.profit); vB = Number(b.profit);
-                    }
-                    return historySortOrder === 'asc' ? vA - vB : vB - vA;
-                });
-            }
-
-            // 3. 計算動態篩選下的損益加總
-            let totalFilteredProfit = 0;
-            filtered.forEach(h => {
-                if(h.type === '賣出') {
-                    totalFilteredProfit += (Number(h.profit) || 0);
-                }
-            });
-
-            const profitBox = document.getElementById('filteredProfitTotal');
-            profitBox.innerText = (totalFilteredProfit >= 0 ? '+$' : '-$') + Math.abs(Math.round(totalFilteredProfit)).toLocaleString();
-            profitBox.className = `text-lg font-bold font-mono ${totalFilteredProfit >= 0 ? 'text-red-400' : 'text-emerald-400'}`;
-
-            if(filtered.length === 0) {
-                hbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 bg-slate-50">沒有符合當前篩選條件的歷史明細項目</td></tr>`;
-                return;
-            }
-
-            // 4. 渲染表格
-            hbody.innerHTML = filtered.map(h => `
-                <tr class="hover:bg-slate-50 transition">
-                    <td class="p-3 pl-4 text-slate-500">${h.date}</td>
-                    <td class="p-3 font-semibold text-slate-700">${h.name}</td>
-                    <td class="p-3"><span class="px-2 py-0.5 rounded text-xs ${h.type==='買入'?'bg-red-50 text-red-600':'bg-emerald-50 text-emerald-600'}">${h.type}</span></td>
-                    <td class="p-3">${h.shares.toLocaleString()}</td>
-                    <td class="p-3">$${h.price}</td>
-                    <td class="p-3">$${Math.round(h.total).toLocaleString()}</td>
-                    <td class="p-3 pr-4 font-bold ${h.profit >= 0 ? 'text-red-500' : 'text-emerald-500'}">${h.type === '賣出' ? '$' + Math.round(h.profit).toLocaleString() : '--'}</td>
-                </tr>
-            `).join('');
-        }
-
         function updateFilterOptions() {
             const select = document.getElementById('filterName');
             const currentSelected = select.value;
             select.innerHTML = '<option value="all">顯示全部標的</option>';
             const uniqueNames = [...new Set(stocks.map(s => s.name).concat(history.map(h => h.name)))];
             uniqueNames.forEach(n => { if(n) select.innerHTML += `<option value="${n}">${n}</option>`; });
-            // 保留原本選擇的選項
             if(uniqueNames.includes(currentSelected)) select.value = currentSelected;
         }
 
@@ -520,7 +591,6 @@
         
         function saveData() { localStorage.setItem('my_stocks', JSON.stringify(stocks)); localStorage.setItem('my_history', JSON.stringify(history)); alert('💾 數據已安全同步儲存至本地瀏覽器！'); }
 
-        // 初始化
         updateFilterOptions();
         render();
         setTimeout(refreshAllPrices, 1500);
