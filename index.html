@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>智能庫存動態即時看板 (測試中)</title>
+    <title>智能庫存動態即時看板 (官方數據終極版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .sort-header { cursor: pointer; user-select: none; }
@@ -14,8 +14,8 @@
 <body class="bg-slate-50 min-h-screen p-6 text-slate-800 antialiased">
     <div class="max-w-6xl mx-auto">
         <div class="flex items-center justify-center gap-3 mb-8">
-            <span class="text-4xl filter drop-shadow-sm">🦊</span>
-            <h1 class="text-2xl font-black text-slate-800 tracking-wide">智能庫存動態即時看板 <span class="text-sm font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md ml-1">測試中</span></h1>
+            <div class="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-xl font-bold">📊</div>
+            <h1 class="text-2xl font-black text-slate-800 tracking-wide">智能庫存動態即時看板 <span class="text-sm font-semibold bg-slate-900 text-slate-200 px-2 py-0.5 rounded-md ml-1">官方數據終極版</span></h1>
         </div>
         
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60 mb-6">
@@ -148,6 +148,16 @@
             "2317": "鴻海", "2454": "聯發科", "2382": "廣達", "3231": "緯創"
         };
 
+        function updateStatus(msg, isError = false) {
+            const el = document.getElementById('sysStatus');
+            if (!el) return;
+            if (isError) {
+                el.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> <span class="text-red-500 font-bold">${msg}</span>`;
+            } else {
+                el.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> <span class="text-slate-500">${msg}</span>`;
+            }
+        }
+
         function setSort(field) {
             if (currentSortField === field) {
                 currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
@@ -247,9 +257,15 @@
                                 onchange="handleStockCodeChange(${i}, this.value)" 
                                 class="border border-slate-200 p-1.5 rounded-xl w-44 bg-white text-blue-600 font-bold focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-sm">
                         </td>
-                        <td class="p-4"><input type="number" value="${s.shares}" onchange="stocks[${i}].shares=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700 font-semibold shadow-sm"></td>
-                        <td class="p-4"><input type="number" value="${cost}" onchange="stocks[${i}].cost=Number(this.value);render()" class="border border-slate-200 p-1.5 rounded-xl w-24 text-slate-700 font-semibold shadow-sm"></td>
-                        <td class="p-4"><input type="number" value="${current}" readonly class="border border-slate-100 p-1.5 rounded-xl w-24 text-slate-600 bg-slate-100/80 cursor-not-allowed font-bold"></td>
+                        <td class="p-4">
+                            <input type="number" value="${s.shares}" readonly class="border border-slate-100 p-1.5 rounded-xl w-24 text-slate-500 bg-slate-100/80 cursor-not-allowed font-semibold text-center">
+                        </td>
+                        <td class="p-4">
+                            <input type="number" value="${cost}" readonly class="border border-slate-100 p-1.5 rounded-xl w-24 text-slate-500 bg-slate-100/80 cursor-not-allowed font-semibold text-center">
+                        </td>
+                        <td class="p-4">
+                            <input type="number" value="${current}" readonly class="border border-slate-100 p-1.5 rounded-xl w-24 text-slate-600 bg-slate-100/80 cursor-not-allowed font-bold text-center">
+                        </td>
                         <td class="p-4 font-black ${colorClass}">${isProfit ? '+' : ''}${diffRatio}%</td>
                         <td class="p-4 text-slate-600 font-semibold">$${Math.round(marketVal).toLocaleString()}</td>
                         <td class="p-4 text-slate-400 font-medium">${capWeight}</td>
@@ -332,11 +348,15 @@
             const num = Number(document.getElementById(`inlineShares_${i}`).value);
             const price = Number(document.getElementById(`inlinePrice_${i}`).value);
             
-            if (!tradeDate) { alert("❌ 請選擇正確的交易日期！"); return; }
-            if (!num || num <= 0 || !price || price <= 0) { alert("❌ 股數與單價必須大於 0！"); return; }
+            if (!tradeDate) { updateStatus("❌ 提交失敗：請選擇正確的交易日期！", true); return; }
+            if (!num || num <= 0 || !price || price <= 0) { updateStatus("❌ 提交失敗：股數與單價必須大於 0！", true); return; }
 
             let realProfit = 0;
             if (type === '賣出') {
+                if (num > Number(stocks[i].shares)) {
+                    updateStatus(`❌ 錯誤：賣出股數 (${num}) 大於現有庫存 (${stocks[i].shares})！`, true);
+                    return;
+                }
                 realProfit = (price - Number(stocks[i].cost)) * num;
                 stocks[i].shares = Number(stocks[i].shares) - num;
             } else {
@@ -363,6 +383,7 @@
             localStorage.setItem('my_stocks', JSON.stringify(stocks));
             localStorage.setItem('my_history', JSON.stringify(history));
             
+            updateStatus(`✅ 交易紀錄成功提交！庫存已同步重算。`);
             render();
             updateFilterOptions();
         }
@@ -465,7 +486,7 @@
             const newPrice = Number(document.getElementById(`editPrice_${id}`).value);
 
             if (!newDate || newShares <= 0 || newPrice <= 0) {
-                alert("❌ 請輸入有效的日期、數量與金額數值！");
+                updateStatus("❌ 儲存失敗：請輸入有效的日期、數量與金額數值！", true);
                 return;
             }
 
@@ -485,6 +506,7 @@
                 
                 history[targetIdx] = item;
                 localStorage.setItem('my_history', JSON.stringify(history));
+                updateStatus("✅ 歷史紀錄已成功更新重算！");
             }
 
             editingHistoryId = null;
@@ -492,12 +514,11 @@
         }
 
         function deleteHistoryRow(id) {
-            if(confirm("確定要刪除此筆交易明細嗎？（這不會直接去回溯影響你上方的活體庫存均價，僅移出歷史對帳單）")) {
-                history = history.filter(h => h.id !== id);
-                localStorage.setItem('my_history', JSON.stringify(history));
-                render();
-                updateFilterOptions();
-            }
+            history = history.filter(h => h.id !== id);
+            localStorage.setItem('my_history', JSON.stringify(history));
+            updateStatus("🗑️ 歷史交易項目已移出對帳單");
+            render();
+            updateFilterOptions();
         }
 
         async function fetchRealTWPrice(code) {
@@ -529,11 +550,17 @@
         }
 
         async function handleStockCodeChange(index, value) {
-            const updateStatus = (msg) => document.getElementById('sysStatus').innerText = msg;
             const codeMatch = value.match(/\d+/);
             if (!codeMatch) return;
             const code = codeMatch[0];
             
+            // 防呆：檢查是否已有相同代號的股票
+            const isDuplicate = stocks.some((s, idx) => idx !== index && s.name.includes(code));
+            if (isDuplicate) {
+                updateStatus(`⚠️ 提示：庫存中已有代號 ${code} 的標的，請直接在該列點擊「交易」異動活體帳目即可。`, true);
+                return;
+            }
+
             updateStatus(`🔍 正在連線查詢台灣官方數據庫 ${code} ...`);
 
             const result = await fetchRealTWPrice(code);
@@ -545,7 +572,7 @@
                 let fallbackName = stockDatabase[code] || "台灣個股";
                 stocks[index].name = `${code} ${fallbackName}`;
                 if(stocks[index].current === 0) stocks[index].current = 100;
-                updateStatus(`⚠️ 官方數據同步完成`);
+                updateStatus(`⚠️ 官方數據未完全同步，已加載預設緩存代稱`);
             }
 
             localStorage.setItem('my_stocks', JSON.stringify(stocks));
@@ -554,7 +581,6 @@
         }
 
         async function refreshAllPrices() {
-            const updateStatus = (msg) => document.getElementById('sysStatus').innerText = msg;
             updateStatus(`🔄 開始強制批量同步所有官方市場最新股價...`);
             for(let i=0; i<stocks.length; i++) {
                 const codeMatch = stocks[i].name.match(/\d+/);
@@ -568,11 +594,25 @@
             render();
         }
 
-        function addStockRow() { stocks.push({name: '', shares: 0, cost: 0, current: 0}); render(); updateFilterOptions(); }
-        function delRow(i) { stocks.splice(i, 1); activeTradeIndex = null; render(); updateFilterOptions(); localStorage.setItem('my_stocks', JSON.stringify(stocks)); }
+        function addStockRow() { 
+            stocks.push({name: '', shares: 0, cost: 0, current: 0}); 
+            activeTradeIndex = stocks.length - 1; // 自動幫使用者點開交易異動面板
+            render(); 
+            updateFilterOptions(); 
+        }
+        
+        function delRow(i) { 
+            stocks.splice(i, 1); 
+            activeTradeIndex = null; 
+            updateStatus("🗑️ 庫存個股已成功移出看板");
+            render(); 
+            updateFilterOptions(); 
+            localStorage.setItem('my_stocks', JSON.stringify(stocks)); 
+        }
 
         function updateFilterOptions() {
             const select = document.getElementById('filterName');
+            if(!select) return;
             const currentSelected = select.value;
             select.innerHTML = '<option value="all">顯示全部標的</option>';
             const uniqueNames = [...new Set(stocks.map(s => s.name).concat(history.map(h => h.name)))];
@@ -581,15 +621,18 @@
         }
 
         function clearHistory() { 
-            if(confirm("⚠️ 確定要永久清空所有歷史交易明細嗎？此操作無法還原。")) {
-                history = []; 
-                localStorage.setItem('my_history', JSON.stringify(history)); 
-                renderHistory(); 
-                updateFilterOptions();
-            }
+            history = []; 
+            localStorage.setItem('my_history', JSON.stringify(history)); 
+            updateStatus("🗑️ 歷史交易明細已全部清空");
+            renderHistory(); 
+            updateFilterOptions();
         }
         
-        function saveData() { localStorage.setItem('my_stocks', JSON.stringify(stocks)); localStorage.setItem('my_history', JSON.stringify(history)); alert('💾 數據已安全同步儲存至本地瀏覽器！'); }
+        function saveData() { 
+            localStorage.setItem('my_stocks', JSON.stringify(stocks)); 
+            localStorage.setItem('my_history', JSON.stringify(history)); 
+            updateStatus('💾 數據已安全同步儲存至本地瀏覽器！'); 
+        }
 
         updateFilterOptions();
         render();
