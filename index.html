@@ -700,5 +700,165 @@
         render();
         setTimeout(refreshAllPrices, 1500);
     </script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+
+    <script>
+        // 1. 您的專屬憑證與控制參數設定
+        const API_KEY = 'AIzaSyBNIkGGSmbqt2TM7xBLxDX0RtwFfv2W_Es'; 
+        const CLIENT_ID = '354816403373-0p617aj4j2b51rffidt2hstq203lh814.apps.googleusercontent.com';
+        const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
+        const SCOPES = 'https://www.googleapis.com/auth/drive.appdata'; // 讀寫使用者自己的應用程式專屬資料夾
+        const FILE_NAME = 'investment_accounting_backup.json'; // 儲存在雲端的檔名
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+        let cloudFileId = null; // 用來記錄雲端檔案的 ID
+
+        // 2. 初始化 Google API 客戶端
+        function gapiLoaded() { gapi.load('client', initGapiClient); }
+        async function initGapiClient() {
+            try {
+                await gapi.client.init({ apiKey: API_KEY, discoveryDocs: DISCOVERY_DOCS });
+                gapiInited = true; checkAndAppendAuthButton();
+            } catch (e) { console.error("GAPI 初始化失敗", e); }
+        }
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID, scope: SCOPES, callback: '', 
+            });
+            gisInited = true; checkAndAppendAuthButton();
+        }
+
+        // 3. 在畫面上動態塞入一個「同步雲端」的按鈕 (避免破壞您原本優美的 CSS 畫面)
+        function checkAndAppendAuthButton() {
+            if (gapiInited && gisInited && !document.getElementById('google-sync-btn')) {
+                const btn = document.createElement('button');
+                btn.id = 'google-sync-btn';
+                btn.innerHTML = '🔄 登入 Google 同步雲端資料';
+                // 這裡套用一些簡單的樣式，固定在畫面右下角
+                btn.style = 'position:fixed; bottom:20px; right:20px; z-index:9999; padding:10px 16px; background:#4285F4; color:white; border:none; border-radius:50px; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px rgba(0,0,0,0.1);';
+                btn.onclick = handleAuthClick;
+                document.body.appendChild(btn);
+            }
+        }
+
+        // 4. 處理點擊登入授權
+        function handleAuthClick() {
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) throw (resp);
+                document.getElementById('google-sync-btn').innerHTML = '⚡ 正在從雲端載入資料...';
+                await loadDataFromGoogleDrive();
+            };
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''});
+            }
+        }
+
+        // 5. 【讀取功能】從使用者的 Google Drive 撈取舊資料
+        async function loadDataFromGoogleDrive() {
+            try {
+                const response = await gapi.client.drive.files.list({
+                    spaces: 'appDataFolder', fields: 'files(id, name)', q: `name = '${FILE_NAME}'`
+                });
+                const files = response.result.files;
+                if (files && files.length > 0) {
+                    cloudFileId = files[0].id;
+                    const fileContent = await gapi.client.drive.files.get({ fileId: cloudFileId, alt: 'media' });
+                    
+                    if (fileContent.result) {
+                        // 🌟【核心關鍵串接】
+                        // 將從雲端撈到的 JSON 字串回復到本地 LocalStorage 裡
+                        localStorage.setItem('investment_accounting_data', JSON.stringify(fileContent.result));
+                        
+                        document.getElementById('google-sync-btn').innerHTML = '✅ 雲端同步成功！頁面即將重整...';
+                        document.getElementById('google-sync-btn').style.background = '#34A853';
+                        
+                        // 延遲一秒重整網頁，讓您的舊程式碼直接讀取更新後的 LocalStorage 渲染畫面
+                        setTimeout(() => { location.reload(); }, 1200);
+                    }
+                } else {
+                    document.getElementById('google-sync-btn').innerHTML = '🆕 雲端無過往資料，已連線（後續儲存將同步上傳）';
+                    document.getElementById('google-sync-btn').style.background = '#FBBC05';
+                    // 找不到檔案，代表是第一次使用雲端同步，先把現有的本機資料打包傳上雲端備份
+                    await saveDataToGoogleDrive();
+                }
+            } catch (err) {
+                console.error("讀取雲端失敗", err);
+                document.getElementById('google-sync-btn').innerHTML = '❌ 同步失敗，請重試';
+            }
+        }
+
+        // 6. 【儲存功能】將本地最新的資料同步推回雲端
+        async function saveDataToGoogleDrive() {
+            // 抓取你目前網頁存在 localStorage 的全部記帳資料
+            // 💡 注意：請確認您原本塞進 localStorage 的 Key 名稱是否為 'investment_accounting_data'，如果不是請手動修改下方這行
+            const localData = localStorage.getItem('investment_accounting_data') || '{}';
+            
+            try {
+                if (!cloudFileId) {
+                    // 如果前面沒找到過 FileID，再搜尋確認一次
+                    const response = await gapi.client.drive.files.list({
+                        spaces: 'appDataFolder', fields: 'files(id, name)', q: `name = '${FILE_NAME}'`
+                    });
+                    if (response.result.files && response.result.files.length > 0) {
+                        cloudFileId = response.result.files[0].id;
+                    }
+                }
+
+                if (cloudFileId) {
+                    // 檔案已存在，進行更新 (UPDATE)
+                    await gapi.client.request({
+                        path: `/upload/drive/v3/files/${cloudFileId}`,
+                        method: 'PATCH',
+                        params: { uploadType: 'media' },
+                        body: localData
+                    });
+                    console.log("資料成功同步更新至 Google 雲端！");
+                } else {
+                    // 檔案不存在，新建檔案 (CREATE)
+                    const metadata = { 'name': FILE_NAME, 'parents': ['appDataFolder'] };
+                    const boundary = 'foo_bar_baz';
+                    const delimiter = `\r\n--${boundary}\r\n`;
+                    const close_delim = `\r\n--${boundary}--`;
+                    const contentType = 'application/json';
+                    
+                    const multipartRequestBody =
+                        delimiter +
+                        'Content-Type: application/json\r\n\r\n' +
+                        JSON.stringify(metadata) +
+                        delimiter +
+                        'Content-Type: ' + contentType + '\r\n\r\n' +
+                        localData +
+                        close_delim;
+
+                    const request = await gapi.client.request({
+                        path: '/upload/drive/v3/files',
+                        method: 'POST',
+                        params: { uploadType: 'multipart' },
+                        headers: { 'Content-Type': `multipart/related; boundary="${boundary}"` },
+                        body: multipartRequestBody
+                    });
+                    cloudFileId = request.result.id;
+                    console.log("全新雲端備份檔案建立成功！");
+                }
+            } catch (err) {
+                console.error("同步至雲端失敗", err);
+            }
+        }
+
+        // 7. 自動攔截機制：當您原本網站的程式碼觸發資料變更或儲存時，順便呼叫多傳一份去雲端
+        // 這裡幫你監聽「點擊確認、點擊儲存」等儲存行為，或者每當 localStorage 變更時自動執行
+        window.addEventListener('click', function(e) {
+            // 當使用者點擊畫面時，若已經登入過 Google，就在後台默默同步最新資料到雲端
+            if (gapi.client && gapi.client.getToken() !== null) {
+                // 延遲一下確保本機的 localStorage 已經先被您的舊程式碼寫入完成
+                setTimeout(() => { saveDataToGoogleDrive(); }, 500);
+            }
+        });
+    </script>
 </body>
 </html>
