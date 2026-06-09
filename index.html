@@ -143,6 +143,9 @@
         let historySortField = 'date';
         let historySortOrder = 'desc';
 
+        // 定時器變數
+        let autoRefreshInterval = null;
+
         const stockDatabase = {
             "2330": "台積電", "0056": "元大高股息", "00878": "國泰永續高股息", "00919": "群益台灣精選高息", 
             "00929": "復華台灣科技優息", "3661": "世芯-KY", "4966": "譜瑞-KY", "6515": "穎崴",
@@ -558,15 +561,17 @@
             updateFilterOptions();
         }
 
-        // 🌟 【強化股價抓取核心：高階容錯雙向通道】 🌟
+        // 🌟 【強化股價抓取核心：加入防快取機制與時間戳記】 🌟
         async function fetchRealTWPrice(code) {
             const cleanCode = code.replace(/\D/g, '');
             if(!cleanCode) return null;
 
-            // 通道一：Yahoo Finance API (含上市/上櫃後綴)
+            // 核心優化：產生隨機時間戳記防快取
+            const cacheBuster = `&_t=${Date.now()}`;
+
             const yahooUrls = [
-                `https://query1.finance.yahoo.com/v8/finance/chart/${cleanCode}.TW?interval=1d&range=1d`,
-                `https://query1.finance.yahoo.com/v8/finance/chart/${cleanCode}.TWO?interval=1d&range=1d`
+                `https://query1.finance.yahoo.com/v8/finance/chart/${cleanCode}.TW?interval=1d&range=1d${cacheBuster}`,
+                `https://query1.finance.yahoo.com/v8/finance/chart/${cleanCode}.TWO?interval=1d&range=1d${cacheBuster}`
             ];
 
             for(let url of yahooUrls) {
@@ -579,7 +584,6 @@
                             const meta = data.chart.result[0].meta;
                             const price = meta.regularMarketPrice;
                             
-                            // 嚴格驗證：價格必須大於 0 且存在才算成功
                             if(price && price > 0) {
                                 let officialName = stockDatabase[cleanCode] || meta.symbol.replace('.TW','').replace('.TWO','');
                                 return { price: Number(price), name: officialName };
@@ -589,10 +593,8 @@
                 } catch(e) { console.log(`Yahoo 通道連線中斷或受阻，嘗試切換備用通道...`); }
             }
 
-            // 通道二：備用台灣官方開放資料 API (TWSE/TPEX)
             try {
-                // 上市個股個股收盤行情備用路徑
-                const twseUrl = `https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL`;
+                const twseUrl = `https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL?_t=${Date.now()}`;
                 const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(twseUrl)}`);
                 if(res.ok) {
                     const wrapper = await res.json();
@@ -609,7 +611,7 @@
                 }
             } catch(e) { console.log("備用官方通道亦受限。"); }
 
-            return null; // 若全部通道皆無法獲取最新的正確股價，則回傳 null
+            return null; 
         }
 
         async function handleStockCodeChange(index, value) {
@@ -660,7 +662,7 @@
             updateFilterOptions();
         }
 
-        // 🌟 【智慧化股價批量更新與錯誤誠實檢查機制】 🌟
+        // 🌟 【智慧化股價批量更新機制】 🌟
         async function refreshAllPrices() {
             if(stocks.length === 0) {
                 updateStatus(`💡 目前名單中無任何股票持股，無需更新。`);
@@ -684,24 +686,35 @@
                         stocks[i].current = result.price;
                         successCount++;
                     } else {
-                        // 抓取失敗，記錄代號，並維持上次的價格，不歸零
                         failList.push(code);
                     }
                 }
             }
 
-            // 根據最終核對結果，回報最真實的狀態提示，絕不說謊欺騙
+            // 取得當前時間
+            const now = new Date();
+            const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+
             if (failList.length === 0) {
-                updateStatus(`✅ 完美同步！所有個股與 ETF (${successCount}檔) 股價已完全同步至最新市價！`);
+                updateStatus(`✅ 完美同步 (${timeStr})！所有個股與 ETF (${successCount}檔) 股價已完全同步至最新市價！`);
             } else if (successCount > 0) {
-                updateStatus(`⚠️ 部分更新：成功同步 ${successCount} 檔。但個股 [${failList.join(', ')}] 連線阻斷，已維持原快取價。`, true);
+                updateStatus(`⚠️ 部分更新 (${timeStr})：成功同步 ${successCount} 檔。但個股 [${failList.join(', ')}] 連線阻斷，已維持原快取價。`, true);
             } else {
-                updateStatus(`❌ 全面同步失敗：因目前外部 API 代理網域流量過大受限，無法取得市價。已全數維持原留存價格。`, true);
+                updateStatus(`❌ 全面同步失敗 (${timeStr})：因目前外部 API 代理網域流量過大受限，已維持原價格。`, true);
             }
 
             localStorage.setItem('my_stocks', JSON.stringify(stocks));
             updateLocalTimestamp();
             render();
+        }
+
+        function startAutoRefresh() {
+            if(autoRefreshInterval) clearInterval(autoRefreshInterval);
+            // 設定每 60 秒 (60000 毫秒) 自動執行一次批量刷新
+            autoRefreshInterval = setInterval(() => {
+                console.log("「自動校對機制」啟動：執行每分鐘定時背景同步...");
+                refreshAllPrices();
+            }, 60000);
         }
 
         function addStockRow() { 
@@ -762,7 +775,12 @@
         recalculateStocksFromHistory();
         updateFilterOptions();
         render();
-        setTimeout(refreshAllPrices, 1500);
+        
+        // 網頁開啟 1.5 秒後進行首次載入，並同步啟動「每分鐘自動刷新定時器」
+        setTimeout(() => {
+            refreshAllPrices();
+            startAutoRefresh();
+        }, 1500);
     </script>
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
