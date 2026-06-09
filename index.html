@@ -70,7 +70,7 @@
                         </tr>
                     </thead>
                     <tbody id="stockTableBody" class="text-sm divide-y divide-slate-100 font-medium">
-                        </tbody>
+                    </tbody>
                 </table>
             </div>
         </div>
@@ -116,7 +116,7 @@
                         </tr>
                     </thead>
                     <tbody id="historyTableBody" class="text-sm divide-y divide-slate-100 font-medium text-slate-600">
-                        </tbody>
+                    </tbody>
                 </table>
             </div>
 
@@ -132,6 +132,8 @@
     <script>
         let stocks = JSON.parse(localStorage.getItem('my_stocks')) || [];
         let history = JSON.parse(localStorage.getItem('my_history')) || [];
+        // 用來記錄本地資料最後更新時間，若無則預設為 0
+        let localLastUpdated = Number(localStorage.getItem('my_last_updated')) || 0;
         
         let activeTradeIndex = null;
         let editingHistoryId = null; 
@@ -196,7 +198,16 @@
                     changed = true;
                 }
             });
-            if(changed) localStorage.setItem('my_history', JSON.stringify(history));
+            if(changed) {
+                localStorage.setItem('my_history', JSON.stringify(history));
+                updateLocalTimestamp();
+            }
+        }
+
+        // 輔助函式：每次資料有實質變更時，更新本地時間戳記
+        function updateLocalTimestamp() {
+            localLastUpdated = Date.now();
+            localStorage.setItem('my_last_updated', localLastUpdated);
         }
 
         function recalculateStocksFromHistory() {
@@ -227,23 +238,21 @@
                 }
             });
 
-            // 先更新舊有項目
             stocks.forEach(s => {
                 if (s.name && stockMap[s.name]) {
                     s.shares = stockMap[s.name].shares;
                     s.cost = stockMap[s.name].currentCost;
                 } else if (s.name) {
-                    // 如果有名字但歷史已被刪空，重設為0
                     s.shares = 0;
                     s.cost = 0;
                 }
             });
 
-            // 關鍵安全防護：不要直接把無歷史但有名字（正在編輯中）的新項目過濾掉
             stocks = stocks.filter(s => s.name === '' || s.shares > 0 || (s.shares === 0 && s.cost === 0 && !history.some(h => h.name === s.name)));
 
             localStorage.setItem('my_stocks', JSON.stringify(stocks));
             localStorage.setItem('my_history', JSON.stringify(history));
+            updateLocalTimestamp();
         }
 
         function render() {
@@ -607,11 +616,9 @@
                 updateStatus(`⚠️ 官方數據未完全同步，已加載預設緩存代稱`);
             }
 
-            // 更新記憶體狀態
             stocks[index].name = finalName;
             stocks[index].current = finalPrice;
 
-            // 核心修復點：直接就地更新畫面上的欄位文字與連動內嵌面板的文字，先不執行重算與全面重繪
             const inputs = document.querySelectorAll('#stockTableBody input[type="text"]');
             if(inputs[index]) {
                 inputs[index].value = finalName;
@@ -625,7 +632,7 @@
                 priceInput.value = finalPrice;
             }
 
-            // 同步更新篩選清單
+            updateLocalTimestamp();
             updateFilterOptions();
         }
 
@@ -641,6 +648,7 @@
             }
             updateStatus(`✅ 所有個股與 ETF 股價已完全同步至最新市價！`);
             localStorage.setItem('my_stocks', JSON.stringify(stocks));
+            updateLocalTimestamp();
             render();
         }
 
@@ -671,7 +679,6 @@
             const currentSelected = select.value;
             select.innerHTML = '<option value="all">顯示全部標的</option>';
             
-            // 抓取所有有名字的庫存與歷史
             let names = stocks.map(s => s.name).concat(history.map(h => h.name));
             const uniqueNames = [...new Set(names)].filter(Boolean);
             
@@ -684,6 +691,7 @@
             stocks = [];
             localStorage.setItem('my_history', JSON.stringify(history)); 
             localStorage.setItem('my_stocks', JSON.stringify(stocks));
+            updateLocalTimestamp();
             updateStatus("🗑️ 帳目已全面初始化清空");
             render(); 
             updateFilterOptions();
@@ -692,7 +700,12 @@
         function saveData() { 
             localStorage.setItem('my_stocks', JSON.stringify(stocks)); 
             localStorage.setItem('my_history', JSON.stringify(history)); 
+            updateLocalTimestamp();
             updateStatus('💾 數據已安全同步儲存至本地瀏覽器！'); 
+            // 如果已經登入 Google，順便在背景默默更新雲端
+            if (gapi.client && gapi.client.getToken() !== null) {
+                saveDataToGoogleDrive(true);
+            }
         }
 
         recalculateStocksFromHistory();
@@ -704,17 +717,17 @@
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 
     <script>
-        // 1. 您的專屬憑證與控制參數設定
+        // 1. 憑證與控制參數設定
         const API_KEY = 'AIzaSyBNIkGGSmbqt2TM7xBLxDX0RtwFfv2W_Es'; 
         const CLIENT_ID = '354816403373-0p617aj4j2b51rffidt2hstq203lh814.apps.googleusercontent.com';
         const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
-        const SCOPES = 'https://www.googleapis.com/auth/drive.appdata'; // 讀寫使用者自己的應用程式專屬資料夾
-        const FILE_NAME = 'investment_accounting_backup.json'; // 儲存在雲端的檔名
+        const SCOPES = 'https://www.googleapis.com/auth/drive.appdata'; 
+        const FILE_NAME = 'investment_accounting_backup.json'; 
 
         let tokenClient;
         let gapiInited = false;
         let gisInited = false;
-        let cloudFileId = null; // 用來記錄雲端檔案的 ID
+        let cloudFileId = null; 
 
         // 2. 初始化 Google API 客戶端
         function gapiLoaded() { gapi.load('client', initGapiClient); }
@@ -731,14 +744,13 @@
             gisInited = true; checkAndAppendAuthButton();
         }
 
-        // 3. 在畫面上動態塞入一個「同步雲端」的按鈕 (避免破壞您原本優美的 CSS 畫面)
+        // 3. 在畫面上動態塞入一個「同步雲端」的按鈕
         function checkAndAppendAuthButton() {
             if (gapiInited && gisInited && !document.getElementById('google-sync-btn')) {
                 const btn = document.createElement('button');
                 btn.id = 'google-sync-btn';
                 btn.innerHTML = '🔄 登入 Google 同步雲端資料';
-                // 這裡套用一些簡單的樣式，固定在畫面右下角
-                btn.style = 'position:fixed; bottom:20px; right:20px; z-index:9999; padding:10px 16px; background:#4285F4; color:white; border:none; border-radius:50px; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px rgba(0,0,0,0.1);';
+                btn.style = 'position:fixed; bottom:20px; right:20px; z-index:9999; padding:10px 16px; background:#4285F4; color:white; border:none; border-radius:50px; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px rgba(0,0,0,0.1); transition: background 0.3s ease;';
                 btn.onclick = handleAuthClick;
                 document.body.appendChild(btn);
             }
@@ -748,8 +760,8 @@
         function handleAuthClick() {
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) throw (resp);
-                document.getElementById('google-sync-btn').innerHTML = '⚡ 正在從雲端載入資料...';
-                await loadDataFromGoogleDrive();
+                updateSyncBtnStatus('syncing', '⏳ 雙向同步比對中...');
+                await syncDataWithGoogleDrive();
             };
             if (gapi.client.getToken() === null) {
                 tokenClient.requestAccessToken({prompt: 'consent'});
@@ -758,49 +770,95 @@
             }
         }
 
-        // 5. 【讀取功能】從使用者的 Google Drive 撈取舊資料
-        async function loadDataFromGoogleDrive() {
+        // 調整按鈕狀態提示顏色與文字的輔助函式
+        function updateSyncBtnStatus(status, text) {
+            const btn = document.getElementById('google-sync-btn');
+            if (!btn) return;
+            btn.innerHTML = text;
+            if (status === 'syncing') {
+                btn.style.background = '#007bff';
+                btn.disabled = true;
+            } else if (status === 'success') {
+                btn.style.background = '#34A853';
+                btn.disabled = false;
+            } else if (status === 'error') {
+                btn.style.background = '#EA4335';
+                btn.disabled = false;
+            }
+        }
+
+        // 5. 【核心雙向同步機制】時間戳記比對
+        async function syncDataWithGoogleDrive() {
             try {
                 const response = await gapi.client.drive.files.list({
                     spaces: 'appDataFolder', fields: 'files(id, name)', q: `name = '${FILE_NAME}'`
                 });
                 const files = response.result.files;
+                
+                // 準備本機打包的資料物件
+                const localPack = {
+                    stocks: stocks,
+                    history: history,
+                    lastUpdated: localLastUpdated
+                };
+
                 if (files && files.length > 0) {
                     cloudFileId = files[0].id;
                     const fileContent = await gapi.client.drive.files.get({ fileId: cloudFileId, alt: 'media' });
                     
                     if (fileContent.result) {
-                        // 🌟【核心關鍵串接】
-                        // 將從雲端撈到的 JSON 字串回復到本地 LocalStorage 裡
-                        localStorage.setItem('investment_accounting_data', JSON.stringify(fileContent.result));
-                        
-                        document.getElementById('google-sync-btn').innerHTML = '✅ 雲端同步成功！頁面即將重整...';
-                        document.getElementById('google-sync-btn').style.background = '#34A853';
-                        
-                        // 延遲一秒重整網頁，讓您的舊程式碼直接讀取更新後的 LocalStorage 渲染畫面
-                        setTimeout(() => { location.reload(); }, 1200);
+                        const cloudPack = fileContent.result;
+                        const cloudTime = cloudPack.lastUpdated || 0;
+
+                        if (cloudTime > localLastUpdated) {
+                            // 🌟 雲端資料比較新 -> 下載覆蓋本地（就地刷新 UI）
+                            stocks = cloudPack.stocks || [];
+                            history = cloudPack.history || [];
+                            localLastUpdated = cloudTime;
+
+                            localStorage.setItem('my_stocks', JSON.stringify(stocks));
+                            localStorage.setItem('my_history', JSON.stringify(history));
+                            localStorage.setItem('my_last_updated', localLastUpdated);
+                            
+                            updateFilterOptions();
+                            render();
+                            
+                            const now = new Date();
+                            updateSyncBtnStatus('success', `✅ 已自雲端更新 ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+                            console.log("雲端資料較新，已成功就地更新本地看板資料。");
+                        } else if (localLastUpdated > cloudTime) {
+                            // 🌟 本地資料比較新 -> 上傳推給雲端
+                            await saveDataToGoogleDrive();
+                            const now = new Date();
+                            updateSyncBtnStatus('success', `✅ 已同步至雲端 ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+                        } else {
+                            // 兩邊一致
+                            const now = new Date();
+                            updateSyncBtnStatus('success', `✅ 資料已是最新 ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+                        }
                     }
                 } else {
-                    document.getElementById('google-sync-btn').innerHTML = '🆕 雲端無過往資料，已連線（後續儲存將同步上傳）';
-                    document.getElementById('google-sync-btn').style.background = '#FBBC05';
-                    // 找不到檔案，代表是第一次使用雲端同步，先把現有的本機資料打包傳上雲端備份
+                    // 雲端完全無過往檔案 -> 建立全新檔案
                     await saveDataToGoogleDrive();
+                    updateSyncBtnStatus('success', '🆕 雲端備份成功建立！');
                 }
             } catch (err) {
-                console.error("讀取雲端失敗", err);
-                document.getElementById('google-sync-btn').innerHTML = '❌ 同步失敗，請重試';
+                console.error("雙向同步失敗", err);
+                updateSyncBtnStatus('error', '❌ 同步失敗，請重試');
             }
         }
 
-        // 6. 【儲存功能】將本地最新的資料同步推回雲端
-        async function saveDataToGoogleDrive() {
-            // 抓取你目前網頁存在 localStorage 的全部記帳資料
-            // 💡 注意：請確認您原本塞進 localStorage 的 Key 名稱是否為 'investment_accounting_data'，如果不是請手動修改下方這行
-            const localData = localStorage.getItem('investment_accounting_data') || '{}';
+        // 6. 【儲存功能】打包上傳資料
+        async function saveDataToGoogleDrive(isSilent = false) {
+            const localPack = {
+                stocks: stocks,
+                history: history,
+                lastUpdated: localLastUpdated
+            };
+            const payloadStr = JSON.stringify(localPack);
             
             try {
                 if (!cloudFileId) {
-                    // 如果前面沒找到過 FileID，再搜尋確認一次
                     const response = await gapi.client.drive.files.list({
                         spaces: 'appDataFolder', fields: 'files(id, name)', q: `name = '${FILE_NAME}'`
                     });
@@ -810,29 +868,28 @@
                 }
 
                 if (cloudFileId) {
-                    // 檔案已存在，進行更新 (UPDATE)
+                    // 檔案已存在，更新 (PATCH)
                     await gapi.client.request({
                         path: `/upload/drive/v3/files/${cloudFileId}`,
                         method: 'PATCH',
                         params: { uploadType: 'media' },
-                        body: localData
+                        body: payloadStr
                     });
-                    console.log("資料成功同步更新至 Google 雲端！");
+                    console.log("資料默默成功同步更新至 Google 雲端！");
                 } else {
                     // 檔案不存在，新建檔案 (CREATE)
                     const metadata = { 'name': FILE_NAME, 'parents': ['appDataFolder'] };
                     const boundary = 'foo_bar_baz';
                     const delimiter = `\r\n--${boundary}\r\n`;
                     const close_delim = `\r\n--${boundary}--`;
-                    const contentType = 'application/json';
                     
                     const multipartRequestBody =
                         delimiter +
                         'Content-Type: application/json\r\n\r\n' +
                         JSON.stringify(metadata) +
                         delimiter +
-                        'Content-Type: ' + contentType + '\r\n\r\n' +
-                        localData +
+                        'Content-Type: application/json\r\n\r\n' +
+                        payloadStr +
                         close_delim;
 
                     const request = await gapi.client.request({
@@ -845,18 +902,39 @@
                     cloudFileId = request.result.id;
                     console.log("全新雲端備份檔案建立成功！");
                 }
+                if(!isSilent) {
+                    const now = new Date();
+                    updateSyncBtnStatus('success', `✅ 已同步至雲端 ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+                }
             } catch (err) {
                 console.error("同步至雲端失敗", err);
+                if(!isSilent) updateSyncBtnStatus('error', '❌ 同步失敗');
             }
         }
 
-        // 7. 自動攔截機制：當您原本網站的程式碼觸發資料變更或儲存時，順便呼叫多傳一份去雲端
-        // 這裡幫你監聽「點擊確認、點擊儲存」等儲存行為，或者每當 localStorage 變更時自動執行
-        window.addEventListener('click', function(e) {
-            // 當使用者點擊畫面時，若已經登入過 Google，就在後台默默同步最新資料到雲端
-            if (gapi.client && gapi.client.getToken() !== null) {
-                // 延遲一下確保本機的 localStorage 已經先被您的舊程式碼寫入完成
-                setTimeout(() => { saveDataToGoogleDrive(); }, 500);
+        // 7. 移除原本盲目的全網頁 click 監聽器，改為「網頁關閉/重新整理前」精準攔截自動同步
+        window.addEventListener('beforeunload', (event) => {
+            // 檢查使用者是否已經登入過 Google 帳戶
+            if (gapi.client && gapi.client.getToken() !== null && cloudFileId) {
+                const localPack = {
+                    stocks: stocks,
+                    history: history,
+                    lastUpdated: localLastUpdated
+                };
+                
+                // 將 OAuth2 認證 Token 放入 Header 授權
+                const accessToken = gapi.client.getToken().access_token;
+                
+                // 離開網頁前，使用屬性 keepalive: true 確保分頁關閉後請求依然在背景完成
+                fetch(`https://www.googleapis.com/upload/drive/v3/files/${cloudFileId}?uploadType=media`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(localPack),
+                    keepalive: true,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                }).catch(e => console.error("背景自動存檔失敗:", e));
             }
         });
     </script>
