@@ -132,7 +132,6 @@
     <script>
         let stocks = JSON.parse(localStorage.getItem('my_stocks')) || [];
         let history = JSON.parse(localStorage.getItem('my_history')) || [];
-        // 用來記錄本地資料最後更新時間，若無則預設為 0
         let localLastUpdated = Number(localStorage.getItem('my_last_updated')) || 0;
         
         let activeTradeIndex = null;
@@ -147,7 +146,7 @@
         const stockDatabase = {
             "2330": "台積電", "0056": "元大高股息", "00878": "國泰永續高股息", "00919": "群益台灣精選高息", 
             "00929": "復華台灣科技優息", "3661": "世芯-KY", "4966": "譜瑞-KY", "6515": "穎崴",
-            "2317": "鴻海", "2454": "聯發科", "2382": "廣達", "3231": "緯創"
+            "2317": "鴻海", "2454": "聯發科", "2382": "廣達", "3231": "緯創", "3037": "欣興", "3044": "健鼎", "2379": "瑞昱"
         };
 
         function updateStatus(msg, isError = false) {
@@ -204,7 +203,6 @@
             }
         }
 
-        // 輔助函式：每次資料有實質變更時，更新本地時間戳記
         function updateLocalTimestamp() {
             localLastUpdated = Date.now();
             localStorage.setItem('my_last_updated', localLastUpdated);
@@ -560,32 +558,58 @@
             updateFilterOptions();
         }
 
+        // 🌟 【強化股價抓取核心：高階容錯雙向通道】 🌟
         async function fetchRealTWPrice(code) {
             const cleanCode = code.replace(/\D/g, '');
             if(!cleanCode) return null;
 
-            const endpoints = [
+            // 通道一：Yahoo Finance API (含上市/上櫃後綴)
+            const yahooUrls = [
                 `https://query1.finance.yahoo.com/v8/finance/chart/${cleanCode}.TW?interval=1d&range=1d`,
                 `https://query1.finance.yahoo.com/v8/finance/chart/${cleanCode}.TWO?interval=1d&range=1d`
             ];
 
-            for(let url of endpoints) {
+            for(let url of yahooUrls) {
                 try {
                     const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
                     if(res.ok) {
                         const wrapper = await res.json();
                         const data = JSON.parse(wrapper.contents);
-                        const meta = data.chart.result[0].meta;
-                        const price = meta.regularMarketPrice;
-                        
-                        if(price && price > 0) {
-                            let officialName = stockDatabase[cleanCode] || meta.symbol.replace('.TW','').replace('.TWO','');
-                            return { price: Number(price), name: officialName };
+                        if (data && data.chart && data.chart.result && data.chart.result[0]) {
+                            const meta = data.chart.result[0].meta;
+                            const price = meta.regularMarketPrice;
+                            
+                            // 嚴格驗證：價格必須大於 0 且存在才算成功
+                            if(price && price > 0) {
+                                let officialName = stockDatabase[cleanCode] || meta.symbol.replace('.TW','').replace('.TWO','');
+                                return { price: Number(price), name: officialName };
+                            }
                         }
                     }
-                } catch(e) { console.log("切換通道..."); }
+                } catch(e) { console.log(`Yahoo 通道連線中斷或受阻，嘗試切換備用通道...`); }
             }
-            return null;
+
+            // 通道二：備用台灣官方開放資料 API (TWSE/TPEX)
+            try {
+                // 上市個股個股收盤行情備用路徑
+                const twseUrl = `https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL`;
+                const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(twseUrl)}`);
+                if(res.ok) {
+                    const wrapper = await res.json();
+                    const data = JSON.parse(wrapper.contents);
+                    if (Array.isArray(data)) {
+                        const matched = data.find(item => item.Code === cleanCode);
+                        if (matched && matched.ClosingPrice) {
+                            const price = Number(matched.ClosingPrice);
+                            if(price > 0) {
+                                return { price: price, name: matched.Name || stockDatabase[cleanCode] };
+                            }
+                        }
+                    }
+                }
+            } catch(e) { console.log("備用官方通道亦受限。"); }
+
+            return null; // 若全部通道皆無法獲取最新的正確股價，則回傳 null
         }
 
         async function handleStockCodeChange(index, value) {
@@ -613,7 +637,7 @@
                 let fallbackName = stockDatabase[code] || "台灣個股";
                 finalName = `${code} ${fallbackName}`;
                 if(stocks[index] && stocks[index].current > 0) finalPrice = stocks[index].current;
-                updateStatus(`⚠️ 官方數據未完全同步，已加載預設緩存代稱`);
+                updateStatus(`⚠️ 目前官方網路通道繁忙，已使用本機暫存股價，請稍後點擊刷新！`, true);
             }
 
             stocks[index].name = finalName;
@@ -636,17 +660,45 @@
             updateFilterOptions();
         }
 
+        // 🌟 【智慧化股價批量更新與錯誤誠實檢查機制】 🌟
         async function refreshAllPrices() {
+            if(stocks.length === 0) {
+                updateStatus(`💡 目前名單中無任何股票持股，無需更新。`);
+                return;
+            }
+
             updateStatus(`🔄 開始強制批量同步所有官方市場最新股價...`);
+            
+            let successCount = 0;
+            let failList = [];
+
             for(let i=0; i<stocks.length; i++) {
                 if(!stocks[i].name) continue;
                 const codeMatch = stocks[i].name.match(/\d+/);
                 if(codeMatch) {
-                    const result = await fetchRealTWPrice(codeMatch[0]);
-                    if(result) stocks[i].current = result.price;
+                    const code = codeMatch[0];
+                    updateStatus(`⏳ [${i+1}/${stocks.length}] 正在同步 ${stocks[i].name} ...`);
+                    
+                    const result = await fetchRealTWPrice(code);
+                    if(result && result.price > 0) {
+                        stocks[i].current = result.price;
+                        successCount++;
+                    } else {
+                        // 抓取失敗，記錄代號，並維持上次的價格，不歸零
+                        failList.push(code);
+                    }
                 }
             }
-            updateStatus(`✅ 所有個股與 ETF 股價已完全同步至最新市價！`);
+
+            // 根據最終核對結果，回報最真實的狀態提示，絕不說謊欺騙
+            if (failList.length === 0) {
+                updateStatus(`✅ 完美同步！所有個股與 ETF (${successCount}檔) 股價已完全同步至最新市價！`);
+            } else if (successCount > 0) {
+                updateStatus(`⚠️ 部分更新：成功同步 ${successCount} 檔。但個股 [${failList.join(', ')}] 連線阻斷，已維持原快取價。`, true);
+            } else {
+                updateStatus(`❌ 全面同步失敗：因目前外部 API 代理網域流量過大受限，無法取得市價。已全數維持原留存價格。`, true);
+            }
+
             localStorage.setItem('my_stocks', JSON.stringify(stocks));
             updateLocalTimestamp();
             render();
@@ -702,7 +754,6 @@
             localStorage.setItem('my_history', JSON.stringify(history)); 
             updateLocalTimestamp();
             updateStatus('💾 數據已安全同步儲存至本地瀏覽器！'); 
-            // 如果已經登入 Google，順便在背景默默更新雲端
             if (gapi.client && gapi.client.getToken() !== null) {
                 saveDataToGoogleDrive(true);
             }
@@ -717,7 +768,6 @@
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 
     <script>
-        // 1. 憑證與控制參數設定
         const API_KEY = 'AIzaSyBNIkGGSmbqt2TM7xBLxDX0RtwFfv2W_Es'; 
         const CLIENT_ID = '354816403373-0p617aj4j2b51rffidt2hstq203lh814.apps.googleusercontent.com';
         const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
@@ -729,7 +779,6 @@
         let gisInited = false;
         let cloudFileId = null; 
 
-        // 2. 初始化 Google API 客戶端
         function gapiLoaded() { gapi.load('client', initGapiClient); }
         async function initGapiClient() {
             try {
@@ -744,7 +793,6 @@
             gisInited = true; checkAndAppendAuthButton();
         }
 
-        // 3. 在畫面上動態塞入一個「同步雲端」的按鈕
         function checkAndAppendAuthButton() {
             if (gapiInited && gisInited && !document.getElementById('google-sync-btn')) {
                 const btn = document.createElement('button');
@@ -756,7 +804,6 @@
             }
         }
 
-        // 4. 處理點擊登入授權
         function handleAuthClick() {
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) throw (resp);
@@ -770,7 +817,6 @@
             }
         }
 
-        // 調整按鈕狀態提示顏色與文字的輔助函式
         function updateSyncBtnStatus(status, text) {
             const btn = document.getElementById('google-sync-btn');
             if (!btn) return;
@@ -787,20 +833,12 @@
             }
         }
 
-        // 5. 【核心雙向同步機制】時間戳記比對
         async function syncDataWithGoogleDrive() {
             try {
                 const response = await gapi.client.drive.files.list({
                     spaces: 'appDataFolder', fields: 'files(id, name)', q: `name = '${FILE_NAME}'`
                 });
                 const files = response.result.files;
-                
-                // 準備本機打包的資料物件
-                const localPack = {
-                    stocks: stocks,
-                    history: history,
-                    lastUpdated: localLastUpdated
-                };
 
                 if (files && files.length > 0) {
                     cloudFileId = files[0].id;
@@ -811,7 +849,6 @@
                         const cloudTime = cloudPack.lastUpdated || 0;
 
                         if (cloudTime > localLastUpdated) {
-                            // 🌟 雲端資料比較新 -> 下載覆蓋本地（就地刷新 UI）
                             stocks = cloudPack.stocks || [];
                             history = cloudPack.history || [];
                             localLastUpdated = cloudTime;
@@ -825,20 +862,16 @@
                             
                             const now = new Date();
                             updateSyncBtnStatus('success', `✅ 已自雲端更新 ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
-                            console.log("雲端資料較新，已成功就地更新本地看板資料。");
                         } else if (localLastUpdated > cloudTime) {
-                            // 🌟 本地資料比較新 -> 上傳推給雲端
                             await saveDataToGoogleDrive();
                             const now = new Date();
                             updateSyncBtnStatus('success', `✅ 已同步至雲端 ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
                         } else {
-                            // 兩邊一致
                             const now = new Date();
                             updateSyncBtnStatus('success', `✅ 資料已是最新 ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
                         }
                     }
                 } else {
-                    // 雲端完全無過往檔案 -> 建立全新檔案
                     await saveDataToGoogleDrive();
                     updateSyncBtnStatus('success', '🆕 雲端備份成功建立！');
                 }
@@ -848,7 +881,6 @@
             }
         }
 
-        // 6. 【儲存功能】打包上傳資料
         async function saveDataToGoogleDrive(isSilent = false) {
             const localPack = {
                 stocks: stocks,
@@ -868,7 +900,6 @@
                 }
 
                 if (cloudFileId) {
-                    // 檔案已存在，更新 (PATCH)
                     await gapi.client.request({
                         path: `/upload/drive/v3/files/${cloudFileId}`,
                         method: 'PATCH',
@@ -877,7 +908,6 @@
                     });
                     console.log("資料默默成功同步更新至 Google 雲端！");
                 } else {
-                    // 檔案不存在，新建檔案 (CREATE)
                     const metadata = { 'name': FILE_NAME, 'parents': ['appDataFolder'] };
                     const boundary = 'foo_bar_baz';
                     const delimiter = `\r\n--${boundary}\r\n`;
@@ -912,20 +942,11 @@
             }
         }
 
-        // 7. 移除原本盲目的全網頁 click 監聽器，改為「網頁關閉/重新整理前」精準攔截自動同步
         window.addEventListener('beforeunload', (event) => {
-            // 檢查使用者是否已經登入過 Google 帳戶
             if (gapi.client && gapi.client.getToken() !== null && cloudFileId) {
-                const localPack = {
-                    stocks: stocks,
-                    history: history,
-                    lastUpdated: localLastUpdated
-                };
-                
-                // 將 OAuth2 認證 Token 放入 Header 授權
+                const localPack = { stocks: stocks, history: history, lastUpdated: localLastUpdated };
                 const accessToken = gapi.client.getToken().access_token;
                 
-                // 離開網頁前，使用屬性 keepalive: true 確保分頁關閉後請求依然在背景完成
                 fetch(`https://www.googleapis.com/upload/drive/v3/files/${cloudFileId}?uploadType=media`, {
                     method: 'PATCH',
                     body: JSON.stringify(localPack),
